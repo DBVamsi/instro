@@ -84,8 +84,8 @@ autodoc_mock_imports = [
     "win32com",
 ]
 
-# Class pages list members in summary tables; each member gets its own page
-# (the scikit-rf layout). Stubs are written to <page dir>/generated/.
+# Class pages list members in summary tables linking to their details further down
+# the same page. Class stubs are written to <page dir>/generated/.
 autosummary_generate = True
 autosummary_generate_overwrite = True
 autosummary_context = {
@@ -151,7 +151,7 @@ html_theme_options = theme_options(
         "discord",
         {"name": "Forum", "url": "https://community.instro.nominal.io", "icon": "lucide:messages-square"},
     ],
-    # left nav lists pages only; generated class/member pages are reached from their tables
+    # left nav lists pages only; generated class pages are reached from their tables
     toctree_maxdepth=1,
 )
 add_module_names = False
