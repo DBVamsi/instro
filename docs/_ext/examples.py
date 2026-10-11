@@ -8,6 +8,7 @@ Files are only rewritten when their content changes, so live preview doesn't loo
 """
 
 import ast
+import json
 from pathlib import Path
 from typing import Any
 
@@ -62,10 +63,22 @@ def _script_title(py: Path) -> str:
     return first.rstrip(".") or py.stem
 
 
+def _script_description(py: Path, title: str) -> str:
+    """The docstring after its title line, or a generic line when that's all there is."""
+    doc = ast.get_docstring(ast.parse(py.read_text(encoding="utf-8"))) or ""
+    rest = " ".join(doc.strip().split("\n", 1)[1:]).split()
+    return " ".join(rest) or f"Runnable instro example: {title}."
+
+
+def _front_matter(description: str) -> str:
+    # the page's meta description (conf.py); JSON strings are valid YAML scalars
+    return f"---\nmyst:\n  html_meta:\n    description: {json.dumps(description)}\n---\n\n"
+
+
 def _page(py: Path, repo: Path, title: str, callout: str = "") -> str:
     rel = py.relative_to(repo).as_posix()
     return (
-        f"# {title}\n\n{callout}"
+        _front_matter(_script_description(py, title)) + f"# {title}\n\n{callout}"
         f"```{{literalinclude}} /../{rel}\n:caption: {py.name}\n:language: python\n```\n\n"
         f"Source: [`{rel}`](https://github.com/nominal-io/instro/blob/main/{rel})\n"
     )
@@ -74,7 +87,8 @@ def _page(py: Path, repo: Path, title: str, callout: str = "") -> str:
 def _index(title: str, entries: list[tuple[str, str]], intro: str = "") -> str:
     links = "".join(f"- [{t}]({name}.md)\n" for t, name in entries)
     toc = "".join(f"{name}\n" for _, name in entries)
-    return f"# {title}\n\n{intro}{links}\n```{{toctree}}\n:hidden:\n\n{toc}```\n"
+    description = f"Runnable instro {title} examples: " + ", ".join(t for t, _ in entries) + "."
+    return _front_matter(description) + f"# {title}\n\n{intro}{links}\n```{{toctree}}\n:hidden:\n\n{toc}```\n"
 
 
 def generate(app: Sphinx) -> None:
@@ -106,7 +120,8 @@ def generate(app: Sphinx) -> None:
             files[out / "packages" / slug / sub / f"{py.stem}.md"] = _page(py, repo, script_title, note)
             _SOURCES[f"examples/packages/{slug}/{sub}/{py.stem}"] = py.relative_to(repo).as_posix()
             sections.setdefault(sub, []).append((script_title, f"{sub}/{py.stem}"))
-        body = f"# {title}\n\n:::{{{kind}}}\n{callout.format(subject='These examples use')}\n:::\n\n"
+        body = _front_matter(f"Runnable examples from the {dist} package.")
+        body += f"# {title}\n\n:::{{{kind}}}\n{callout.format(subject='These examples use')}\n:::\n\n"
         body += (
             "".join(
                 f"## {_title(sub)}\n\n" + "".join(f"- [{t}]({name}.md)\n" for t, name in entries) + "\n"

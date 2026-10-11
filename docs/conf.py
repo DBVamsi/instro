@@ -27,6 +27,7 @@ extensions = [
     "sphinxcontrib.autodoc_pydantic",
     "sphinx_design",
     "sphinx_copybutton",
+    "sphinx_sitemap",
     "pysummary",
     "driver_cards",
     "examples",
@@ -122,6 +123,10 @@ html_favicon = "_static/favicon.png"
 html_copy_source = False
 nominal_ga_id = "G-LR7QM29GGQ"
 
+# sitemap.xml at the site root; robots.txt (_extra/) points crawlers at it
+sitemap_url_scheme = "{link}"  # html_baseurl has no language/version folders
+sitemap_excludes = ["404/", "search/", "genindex/", "_modules/*"]  # _modules: viewcode source listings
+
 html_context = {
     "source_type": "github",
     "source_user": "nominal-io",
@@ -200,7 +205,76 @@ def _hide_edit_link_on_stubs(app, pagename, templatename, context, doctree):
         context["page_source_suffix"] = ""
 
 
+def _clip(text, limit=160):
+    """``text`` on one line, cut to ``limit`` characters at a word."""
+    text = " ".join(text.split())
+    if len(text) > limit:
+        text = text[: limit - 1].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+    return text
+
+
+def _description(doctree, min_length):
+    """The page's first paragraph of prose, skipping ones shorter than ``min_length``."""
+    from docutils import nodes
+    from sphinx import addnodes
+
+    skip = (
+        addnodes.desc_signature,
+        nodes.admonition,
+        nodes.field_list,
+        nodes.table,
+        nodes.sidebar,
+        nodes.list_item,
+    )
+    for para in doctree.findall(nodes.paragraph):
+        if any(isinstance(a, skip) for a in _ancestors(para)):
+            continue
+        text = " ".join(para.astext().split())
+        # autodoc's "Bases: ..." line
+        if text.startswith("Bases: ") or len(text) < max(min_length, 1):
+            continue
+        return text
+    return None
+
+
+def _ancestors(node):
+    while node.parent is not None:
+        node = node.parent
+        yield node
+
+
+def _add_description(app, pagename, templatename, context, doctree):
+    """Give every page a meta description Shibuya renders.
+
+    Shibuya writes ``<meta name="description">`` and ``og:description`` from the
+    page's ``description`` metadata (a ``description:`` key in its front matter),
+    but drops docutils ``<meta>`` tags unless sphinxext-opengraph is loaded, so a
+    ``myst: html_meta: description:`` is copied over. Other pages get their first
+    paragraph: on API pages that's the docstring summary, however short, and on
+    guide pages a 40-character floor skips image- and badge-only paragraphs.
+    """
+    from docutils import nodes
+
+    if doctree is None:
+        return
+    meta = context.get("meta") or {}
+    description = meta.get("description")
+    if not description:
+        tag = next((n for n in doctree.findall(nodes.meta) if n.get("name") == "description"), None)
+        description = tag["content"] if tag else None
+    if not description:
+        name = pagename.rpartition("/")[2]
+        is_api = pagename.startswith("sdk/") and name.startswith("instro.")
+        description = _description(doctree, min_length=0 if is_api else 40)
+        if not description and is_api:
+            module, _, obj = name.rpartition(".")
+            description = f"API reference for {obj} in {module}, part of the instro Python library."
+    if description:
+        context["meta"] = {**meta, "description": _clip(description)}
+
+
 def setup(app):
     app.connect("autodoc-process-docstring", _drop_basemodel_init_doc)
     app.connect("env-updated", _alias_reexports)
     app.connect("html-page-context", _hide_edit_link_on_stubs, priority=600)
+    app.connect("html-page-context", _add_description)
