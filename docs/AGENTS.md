@@ -40,7 +40,7 @@ Scope: `docs/`, one Sphinx site holding the guides (this folder) and the API ref
 ## API pages (`sdk/`)
 
 - Each `sdk/instruments/<category>.md`: `# Title` + description; `## Instrument and Abstract Driver` (autosummary of `Instro<Category>`, `<Category>DriverBase`); `## Vendor Drivers` (hand-written Vendor / Model / Description table, Description as `` {pysummary}`<path>` ``); `## Simulated Driver` if any; `## Types & Configuration`; `---` then the Exceptions notice.
-- Autodoc emits reST, so API directives go in `{eval-rst}` blocks. Autosummary generates a page per table entry into gitignored `generated/` folders; `_templates/autosummary/class.rst` puts each class on one page: data types (pydantic, dataclass, enum) with their fields inline, other classes with member summary tables linking down to each member's details.
+- Autodoc emits reST, so API directives go in `{eval-rst}` blocks. Autosummary writes a gitignored stub (`instro.*.rst`) per table entry next to the SDK page that lists it, so class URLs read `/sdk/<section>/instro.psu.InstroPSU/`; `_templates/autosummary/class.rst` puts each class on one page: data types (pydantic, dataclass, enum) with their fields inline, other classes with member summary tables linking down to each member's details.
 - `conf.py`: vendor packages load from `packages/` source with native SDKs in `autodoc_mock_imports` (a new vendor package needs both); `autosummary_context["extra_methods"]` opts private methods in; a hook resolves re-exported names to their documented original, so document each object once, where defined.
 
 ## Tasks

@@ -85,7 +85,7 @@ autodoc_mock_imports = [
 ]
 
 # Class pages list members in summary tables linking to their details further down
-# the same page. Class stubs are written to <page dir>/generated/.
+# the same page. Class stubs (instro.*.rst) are written next to the page listing them.
 autosummary_generate = True
 autosummary_generate_overwrite = True
 autosummary_context = {
@@ -195,8 +195,8 @@ def _alias_reexports(app, env):
 
 
 def _hide_edit_link_on_stubs(app, pagename, templatename, context, doctree):
-    """Autosummary stubs under generated/ are gitignored, so "Edit this page" would 404."""
-    if "/generated/" in pagename:
+    """Autosummary stubs (sdk/**/instro.*) are gitignored, so "Edit this page" would 404."""
+    if pagename.startswith("sdk/") and pagename.rpartition("/")[2].startswith("instro."):
         context["page_source_suffix"] = ""
 
 

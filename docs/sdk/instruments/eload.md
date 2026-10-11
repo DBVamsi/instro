@@ -6,7 +6,7 @@ Electronic loads.
 
 ```{eval-rst}
 .. autosummary::
-   :toctree: generated
+   :toctree: .
    :nosignatures:
 
    ~instro.eload.InstroELoad
@@ -29,7 +29,7 @@ regardless, so the pages still appear in the sidebar. -->
 .. only:: autosummary_stubs
 
    .. autosummary::
-      :toctree: generated
+      :toctree: .
 
       instro.eload.drivers.bk_85xxb.BK85XXB
 ```
@@ -38,7 +38,7 @@ regardless, so the pages still appear in the sidebar. -->
 
 ```{eval-rst}
 .. autosummary::
-   :toctree: generated
+   :toctree: .
    :nosignatures:
 
    ~instro.eload.types.LoadMode
