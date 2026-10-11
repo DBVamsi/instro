@@ -34,47 +34,49 @@ No vendor drivers ship in this release yet. To use a radio now, see [Custom Driv
 
 ## Details
 
-The following presents details about the `InstroSDR`. Specific driver details can be found on [their pages](#supported-vendors).
 
-### Driver Composition
+### Setup
 
-An `InstroSDR` is built from a concrete driver:
-
-```python
-InstroSDR("name", driver=MyVendorSDR(...))
-```
-
-- The **vendor driver** owns the connection setup and the vendor SDK.
-- **`InstroSDR`** owns the category-level workflow: IQ and spectrum measurements, commands, publishers, the background daemon.
-
-### Lifecycle
-
-The driver captures connection settings on construction and takes the USB handle in `open()`. `close()` releases it, and a closed driver can be reopened:
+`InstroSDR` wraps a vendor driver: the driver owns the radio and its SDK, and `InstroSDR` adds measurements, commands, publishing, and the background daemon. The driver takes the device handle in `open()` and releases it in `close()`. A closed driver can be reopened, and using one before `open()` raises `RuntimeError`.
 
 ```python
 sdr = InstroSDR("sdr", driver=MyVendorSDR(...))
 sdr.open()
 try:
-    ...
+    sdr.set_center_freq(100e6)
+    sdr.set_sample_rate(2.4e6)
+    iq = sdr.measure_iq(n_samples=4096)  # one block, published to the instrument's publishers
+    z = np.asarray(iq.channel_data["sdr.rx0.i"]) + 1j * np.asarray(iq.channel_data["sdr.rx0.q"])
 finally:
     sdr.close()
 ```
 
-Using an unopened driver raises `RuntimeError` rather than reaching into a closed handle.
+Tuners quantize frequency and sample rate, so read a setting back (`get_center_freq()`, `get_sample_rate()`) rather than assuming the request took effect exactly.
 
-### IQ blocks and their timebase
+### Capturing IQ
 
-`measure_iq(n_samples=N)` returns one `Measurement` holding `N` samples across paired `.i` and `.q` channels, not one `Measurement` per sample. The two channels share a timestamp vector whose spacing comes from the rate the **device** reports, not from the host clock, so an IQ block carries the radio's own notion of elapsed time.
+`measure_iq(n_samples=N)` captures one block and returns it as a single `Measurement`: `N` samples on paired `.i` and `.q` channels that share one timestamp vector. The timestamps are spaced by the sample rate the device reports, and the block is placed to end when the read completed. A block that would overlap the previous one (the device had samples buffered) continues the previous block's timeline instead.
 
-Blocks are *backstamped*: the read returns after the samples were captured, so the block is placed to **end** at the moment the read completed. A block sometimes overlaps its predecessor, meaning the device had samples buffered and the read returned faster than the block's own duration. Such a block continues the previous block's timeline instead. A wider gap re-anchors to the wall clock, so genuine dropouts remain visible as gaps.
+The radio is idle between calls, so samples between them are lost and show up as a gap in the timestamps. For gapless capture, use a [stream](#streaming).
 
-:::{note}
-`measure_iq` acquires one block per call. Samples arriving between calls are lost, and that loss shows up as a gap in the timestamps. Use `start()` and `fetch_iq()` for gapless capture.
-:::
+`.i` is the real part and `.q` the imaginary part, as in `z` in the [Setup](#setup) example. Swapping them conjugates the signal, which mirrors the spectrum about the center frequency.
+
+To plot both against the block's timestamps (integer nanoseconds since the Unix epoch):
+
+```python
+import matplotlib.pyplot as plt
+
+t_ms = (np.asarray(iq.timestamps) - iq.timestamps[0]) / 1e6
+plt.plot(t_ms, z.real, label="I (real)")
+plt.plot(t_ms, z.imag, label="Q (imaginary)")
+plt.xlabel("Time (ms)")
+plt.legend()
+plt.show()
+```
 
 ### Streaming
 
-`measure_iq` is a one-shot read: the radio is idle between calls, so whatever it would have produced in that window is gone. For continuous capture, start a stream and fetch from it:
+A stream captures continuously, and each `fetch_iq` returns the next block, exactly one sample period after the last, so the blocks concatenate into one unbroken signal:
 
 ```python
 sdr.start()
@@ -85,79 +87,47 @@ finally:
     sdr.stop()
 ```
 
-Consecutive fetches are contiguous. Successive blocks are exactly one sample period apart, so a stream can be concatenated into one unbroken signal.
-
-A stream covers **one direction and a set of channels**, chosen when it starts:
+A stream covers one direction and a set of channels, fixed when it starts, so `fetch_iq` and `stop` take no channel argument. Receive and transmit are always separate streams, so starting a receive stream never keys a transmitter.
 
 ```python
 sdr.start(direction=Direction.RX, channels=("0", "1"))
 block = sdr.fetch_iq(n_samples=65536)   # both channels, time-aligned
-sdr.stop()
 ```
 
-`fetch_iq` and `stop` take no channel argument: the stream already knows which channels it covers, the same way SoapySDR's `activateStream` acts on a stream handle and UHD's stream args fix the channel list up front. Receive and transmit are always separate streams, so starting a receive stream never keys a transmitter.
+#### Stream health and dropouts
 
-### One-shot reads during a stream
+Each fetch also publishes `backlog`, the samples waiting to be fetched, and `overflow`, `1` when the device dropped samples before this block. A consumer slower than the radio fills the buffer. The oldest samples are then dropped, `overflow` goes high for that block, a warning is logged, and the timestamps jump by the dropped samples, so blocks on either side of a dropout never look contiguous. Watch `backlog` to see it coming.
 
-While a stream is running, `measure_iq`, `measure_spectrum` and `compute_psd` are served from that stream rather than from the device. Reading the device directly would mean two concurrent reads on one handle, which most vendor libraries do not support and which would quietly cost the stream the samples the one-shot read consumed.
+`n_samples` can't exceed the driver's buffer, `STREAM_BUFFER_SAMPLES`. Asking for more raises `ValueError` immediately.
 
-Consequences worth knowing:
+#### One-shot reads during a stream
 
-- A one-shot read **consumes** from the stream, so it slots into the fetch sequence rather than duplicating or skipping data. Interleaving `measure_iq` with `fetch_iq` still yields one unbroken timeline.
-- A stream block is consumed whole, so `channels` defaults to every channel the stream covers. Naming a subset still works and still publishes only that subset, but the rest of that block is consumed with it and cannot be fetched again.
-- It publishes `backlog` and `overflow` exactly as a fetch does, so a dropout is never hidden by having asked for the block through the one-shot call.
-- It returns buffered samples, which can be as old as `get_backlog()` reports. For the most recent samples, drain the backlog or keep the consumer ahead of the radio.
+While a stream runs, `measure_iq`, `measure_spectrum`, and `compute_psd` read from it instead of the device, since most vendor libraries can't serve two reads on one handle. So a one-shot read:
 
-Requesting a channel the stream does not cover raises rather than returning a different path's data. `is_streaming(direction=...)` reports whether routing is in effect.
+- consumes the stream's next block, staying in its timeline;
+- takes that block whole: `channels` defaults to every streamed channel, and any you leave out are discarded with it;
+- publishes `backlog` and `overflow`, like a fetch;
+- returns buffered samples, up to `get_backlog()` old.
 
-Calling `read_iq` straight on a driver during its own stream raises: only the HAL routes.
+Asking for a channel the stream doesn't cover raises, as does calling the driver's own `read_iq` during a stream. `is_streaming()` reports whether a stream is running.
 
-Each fetch also publishes stream health on two channels:
+#### In the background
 
-| Channel | Meaning |
-|---|---|
-| `backlog` | Samples already captured and waiting to be fetched |
-| `overflow` | `1` when the device dropped samples before this block, `0` otherwise |
-
-A consumer slower than the radio eventually fills the buffer, at which point the oldest samples are dropped, `overflow` goes high for that block, and a warning is logged. The flag is per fetch: the next clean block reports `0` again. Watch `backlog` to see it coming.
-
-`n_samples` cannot exceed what the stream buffers, since the reader evicts to stay inside that bound and the request could never be filled. Asking for more raises `ValueError` immediately rather than waiting out the fetch timeout while samples are discarded. Each driver sets the bound as `STREAM_BUFFER_SAMPLES`.
-
-A dropout also opens a real gap in the timestamps. The driver counts what it discarded, so the block after a dropout is placed that many sample periods later rather than being chained on as though nothing was lost. Concatenating blocks across a dropout therefore splices two genuinely separate stretches of signal, and the timestamps say so.
-
-### Streaming in the background
-
-`start(background=True)` hands the fetch loop to the instrument's daemon, so blocks publish continuously without a loop of your own:
+`start(background=True)` hands the fetch loop to the instrument's daemon, so blocks publish without a loop of your own:
 
 ```python
 sdr.start(background=True, n_samples=262144, publish_spectrum=True)
 ```
 
-The daemon calls `fetch_iq` with that block size. Because `fetch_iq` blocks until the radio has the samples, it paces the loop itself, exactly as `InstroDAQ` does for hardware-timed reads. `background_interval` is therefore forced to `0` and refuses to be set: any interval would sit *between* blocks and punch gaps into an otherwise gapless stream.
+The blocking fetch paces the loop, so there is no interval to set (see {py:attr}`~instro.unstable.sdr.InstroSDR.background_interval`).
 
 :::{warning}
-Do not call `measure_spectrum` in a `fetch_iq` loop. While streaming it is served from the stream too, so it consumes a whole block and publishes only the four scalars from it, and the IQ in that block never reaches your publishers. A loop alternating the two publishes roughly half the samples, in blocks the length of `n_samples` separated by gaps of the same length. Pass `publish_spectrum=True` to `fetch_iq` instead and both come from one block.
+Don't alternate `measure_spectrum` with `fetch_iq`. Each spectrum call consumes a block whose IQ is never published, so the loop loses about half the signal. Pass `publish_spectrum=True` to `fetch_iq` to get both from one block.
 :::
-
-:::{note}
-`stop()` always stops both the daemon and the hardware stream, and `close()` routes through it, so a stream cannot outlive the device handle.
-:::
-
-### Reassembling the complex signal
-
-`.i` is the real part and `.q` the imaginary part:
-
-```python
-z = np.asarray(iq.channel_data["sdr.rx0.i"]) + 1j * np.asarray(iq.channel_data["sdr.rx0.q"])
-```
-
-Swapping them conjugates the signal, which mirrors the spectrum about the center frequency.
 
 ### Spectrum
 
-`measure_spectrum()` publishes four **scalar** channels summarizing a Hann-windowed FFT of one block. It does not publish the spectrum array: a power spectrum is a function of frequency at a single instant, and `Measurement` describes channels over time.
-
-For the full array, `compute_psd()` returns `(frequencies_hz, power_db)` to the caller and publishes nothing:
+`measure_spectrum()` publishes four scalar features of one block, not the spectrum array: a spectrum is a function of frequency at one instant, while a `Measurement` holds channels over time. For the array, `compute_psd()` returns it without publishing. The {py:meth}`~instro.unstable.sdr.InstroSDR.measure_spectrum` and {py:meth}`~instro.unstable.sdr.InstroSDR.compute_psd` references define the features and return values.
 
 ```python
 freqs, power_db = sdr.compute_psd(n_samples=16384)
@@ -165,52 +135,22 @@ peak = freqs[int(np.argmax(power_db))]
 ```
 
 :::{note}
-A direct-conversion receiver leaks its local oscillator into the DC bin, which lands on the center frequency. Mask a few kHz around the center before searching for a peak, or the strongest bin will always be that spike.
+A direct-conversion receiver leaks its local oscillator into the bin at the center frequency. Mask a few kHz around the center before searching for a peak, or that spike always wins. Likewise, `occupied_bw_hz` is only meaningful on a clean signal: over mostly noise it approaches the full sample rate.
 :::
 
 ### Published channels
 
-Every measurement/command call produces a channel keyed under `{name}.{path}.{descriptor}`, where `{name}` is the constructor argument and `{path}` names the signal path the call applied to (`rx0` by default). A two-channel transceiver publishes `rx0`, `rx1`, `tx0` and `tx1` independently.
+Every call publishes under `{name}.{path}.{descriptor}`, where `{path}` is the signal path it applied to (`rx0` by default). A two-channel transceiver publishes `rx0`, `rx1`, `tx0`, and `tx1` independently, so an SDR named `sdr` publishes `sdr.rx0.i`, `sdr.rx0.center_freq.cmd`, and so on.
 
 | Method | Descriptor | Type |
-|--------|------------|------|
-| `set_center_freq()` | `center_freq.cmd` | command |
-| `set_sample_rate()` | `sample_rate.cmd` | command |
-| `set_gain()` | `gain.cmd` | command |
-| `set_gain_mode()` | `gain_mode.cmd` | command |
-| `set_bandwidth()` | `bandwidth.cmd` | command |
-| `set_freq_correction()` | `freq_correction.cmd` | command |
-| `set_antenna()` | `antenna.cmd` | command |
-| `get_center_freq()` | `center_freq` | telemetry |
-| `get_sample_rate()` | `sample_rate` | telemetry |
-| `get_gain()` | `gain` | telemetry |
-| `get_gain_mode()` | `gain_mode` | telemetry |
-| `get_bandwidth()` | `bandwidth` | telemetry |
-| `get_freq_correction()` | `freq_correction` | telemetry |
-| `get_antenna()` | `antenna` | telemetry |
-| `measure_iq()` | `i`, `q` | telemetry (one value per sample) |
-| `measure_spectrum()` | `spectrum.peak_power_db` | telemetry |
-| `measure_spectrum()` | `spectrum.peak_freq_hz` | telemetry |
-| `measure_spectrum()` | `spectrum.mean_power_db` | telemetry |
-| `measure_spectrum()` | `spectrum.occupied_bw_hz` | telemetry |
-| `fetch_iq()` | `i`, `q` | telemetry (one value per sample) |
-| `fetch_iq()` | `backlog`, `overflow` | telemetry |
+|---|---|---|
+| `set_<setting>()` | `<setting>.cmd` | command |
+| `get_<setting>()` | `<setting>` | telemetry |
+| `measure_iq()`, `fetch_iq()` | `i`, `q` | telemetry (one value per sample) |
+| `fetch_iq()`, and one-shot reads during a stream | `backlog`, `overflow` | telemetry |
+| `measure_spectrum()` | `spectrum.peak_power_db`, `spectrum.peak_freq_hz`, `spectrum.mean_power_db`, `spectrum.occupied_bw_hz` | telemetry |
 
-So an SDR named `sdr` publishes `sdr.rx0.i`, `sdr.rx0.center_freq.cmd`, and so on.
-
-:::{note}
-`compute_psd()` returns `(frequencies_hz, power_db)` as numpy arrays directly and does not publish. Every other readback listed above publishes a `Measurement` on the descriptor shown.
-
-`occupied_bw_hz` is the width of the band holding 99% of total power. Over a span that is mostly noise it approaches the full sample rate; it is only meaningful on a clean signal.
-:::
-
-### Method reference
-
-Every method, with its arguments, units, and return value, is in the {py:class}`InstroSDR reference <instro.unstable.sdr.InstroSDR>`.
-
-:::{note}
-Tuners quantize both frequency and sample rate, so the value a getter reports can differ from what was requested. Read back rather than assuming the request took effect exactly.
-:::
+Settings: `center_freq`, `sample_rate`, `gain`, `gain_mode`, `bandwidth`, `freq_correction`, `antenna`.
 
 ## Custom Driver Development
 
