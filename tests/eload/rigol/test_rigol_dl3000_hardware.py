@@ -41,7 +41,7 @@ from instro.lib.types import Command
 pytestmark = pytest.mark.hardware
 
 # --- Configuration — edit before running -----------------------------------
-RESOURCE = "USB0::0x1AB1::0x0E11::DL3A286M00348::INSTR"
+RESOURCE = "USB0::0x1AB1::0x0E11::DL3A286M00348::INSTR"  # <-- edit to your unit's VISA resource string
 CHANNEL = 1
 
 # Safe operating levels — kept tiny since the input terminals are open. Raise

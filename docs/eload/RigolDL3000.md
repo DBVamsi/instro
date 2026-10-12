@@ -28,12 +28,4 @@ eload = InstroELoad(
 )
 ```
 
-## Limitations
-
-- `short_output` raises `FeatureNotSupportedError`. The DL3000 programming guide has no short-circuit command.
-- `set_range` raises `FeatureNotSupportedError` in CP mode. The DL3000 has no CP range.
-- Disable the input before you change the range. The DL3000 user guide gives this caution for each range setting.
-- Set the range before the level. A range change resets the level to 0.
-- In CR mode, the load rejects a range that does not cover the present level.
-
 Parameters and methods specific to {py:obj}`RigolDL3000 <instro.eload.drivers.rigol_dl3000.RigolDL3000>` can be found in the [SDK](/sdk/index.md).
