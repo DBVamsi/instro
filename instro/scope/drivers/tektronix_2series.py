@@ -345,12 +345,22 @@ class Tektronix2SeriesMSO(ScopeDriverBase):
     def _read_file_from_instrument(self, instrument_path: str) -> bytes:
         """``FILESystem:READFile`` from the scope's filesystem with a 30 s timeout (file transfers can be slow)."""
         with self._visa.temporary_timeout(30000):  # File transfers can be slow
-            self._visa.write(f'FILESystem:READFile "{instrument_path}"')
-            return self._visa.read_raw()
+            inst = self._visa._inst
+            assert inst is not None
+            original_termination = inst.read_termination
+            inst.read_termination = None  # type: ignore[assignment]  # file bytes contain arbitrary \n; read until the end-of-message flag instead
+            try:
+                self._visa.write(f'FILESystem:READFile "{instrument_path}"')
+                data = self._visa.read_raw()
+            finally:
+                inst.read_termination = original_termination  # type: ignore[assignment]
+            return data.removesuffix(b"\n")  # the scope appends one message terminator after the file bytes
 
     def _write_file_to_instrument(self, instrument_path: str, data: bytes) -> None:
         """``FILESystem:WRITEFile`` to the scope's filesystem."""
-        self._visa.write_raw(f'FILESystem:WRITEFile "{instrument_path}",'.encode() + data)
+        size = str(len(data))
+        block = f"#{len(size)}{size}".encode() + data  # WRITEFile takes an IEEE 488.2 definite-length block
+        self._visa.write_raw(f'FILESystem:WRITEFile "{instrument_path}",'.encode() + block)
 
     def save_screenshot(self, filepath: str, to_instrument: bool = False) -> bytes:
         if to_instrument:

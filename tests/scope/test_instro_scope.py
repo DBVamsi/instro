@@ -422,6 +422,38 @@ def test_tektronix_fetch_waveform_drains_errors_before_first_query(
     assert all(c[0] == "write" for c in calls[:first_query_index])
 
 
+def test_tektronix_read_file_disables_read_termination_during_binary_read(
+    tektronix: Tektronix2SeriesMSO, tektronix_visa: MagicMock
+) -> None:
+    inst = MagicMock()
+    inst.read_termination = "\n"
+    tektronix_visa._inst = inst
+    seen: list[object] = []
+
+    def read_raw() -> bytes:
+        seen.append(inst.read_termination)
+        return b"\x89PNG\r\n\x1a\nbody\n"
+
+    tektronix_visa.read_raw.side_effect = read_raw
+
+    data = tektronix._read_file_from_instrument("C:/shot.png")
+
+    assert seen == [None]  # a "\n" terminator would cut the read short inside the PNG header
+    assert inst.read_termination == "\n"
+    assert data == b"\x89PNG\r\n\x1a\nbody"
+
+
+def test_tektronix_load_settings_host_writes_definite_length_block(
+    tektronix: Tektronix2SeriesMSO, tektronix_visa: MagicMock, tmp_path
+) -> None:
+    path = tmp_path / "setup.set"
+    path.write_bytes(b"hello")
+
+    tektronix.load_settings(str(path))
+
+    tektronix_visa.write_raw.assert_called_once_with(b'FILESystem:WRITEFile "C:/nominal_temp_setup.set",#15hello')
+
+
 # --- SiglentSDS1000XE unit tests ---
 
 
