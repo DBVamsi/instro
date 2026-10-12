@@ -29,7 +29,7 @@ Scope: `docs/`, one Sphinx site holding the guides (this folder) and the API ref
 - **Sections:** the header tabs (Guides, Examples, SDK) are sections; `nominal_sphinx_theme` trims the sidebar to the current one by the tab's folder (`sdk/`, `examples/`, else guides), from `nav_links` in `conf.py`.
 - **Theme:** styling comes from `nominal_sphinx_theme` (nominal-io/nominal-sphinx-theme); change it there, then `uv lock --upgrade-package nominal-sphinx-theme` here. Keep `_static/custom.css` to instro-only styles.
 - **Hidden pages:** pages outside the sidebar set `orphan: true` in front matter. Driver pages and protocol sub-pages are orphans.
-- **Page head:** `# Title`, then an optional `{.lead}` paragraph (grey subtitle), with `myst: html_meta: description:` in front matter for search engines. Pages without one get their first paragraph (API pages: the docstring summary) as the description; `_add_description` in `conf.py`.
+- **Page head:** `# Title`, then an optional `{.lead}` paragraph (grey subtitle), with `myst: html_meta: description:` (and optionally `seo_title:`) in front matter for search engines; see the README's "Search engines".
 
 ## Guides pages (MyST Markdown)
 
@@ -47,7 +47,7 @@ Scope: `docs/`, one Sphinx site holding the guides (this folder) and the API ref
 
 ### Add a vendor driver
 
-1. `docs/<category>/<Driver>.md` and `<Driver>.png`. Copy a sibling: front matter `orphan: true`, `card: <Vendor Model>`, `image: <Driver>.png`; `# <Driver>`, a `{.lead}` line, the image, a `## Creating an Instro<Category> with <Driver>` example. The category's `driver-cards` grid picks it up.
+1. `docs/<category>/<Driver>.md` and `<Driver>.png`. Copy a sibling: front matter `orphan: true`, `card: <Vendor Model>`, `image: <Driver>.png`; no description (it is generated from `card:`); `# <Driver>`, a `{.lead}` line ("Control the <card> <instrument> from Python through [`Instro<Category>`](/<category>.md)."), the image, a `## Creating an Instro<Category> with <Driver>` example. The category's `driver-cards` grid picks it up.
 2. In `sdk/instruments/<category>.md`, add a Vendor Drivers table row and the class path to the hidden `.. only:: autosummary_stubs` list beneath it (the table is hand-written, so this block is what generates the class page).
 3. `just build-docs`.
 

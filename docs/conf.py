@@ -243,32 +243,57 @@ def _ancestors(node):
         yield node
 
 
-def _add_description(app, pagename, templatename, context, doctree):
-    """Give every page a meta description Shibuya renders.
+# Driver pages (a `card:` in front matter) by folder: the instrument noun and what the
+# driver does, for their generated search-result title and description.
+_DRIVER_CATEGORIES = {
+    "psu": ("power supply", "set voltage and current, enable outputs, read measurements"),
+    "dmm": ("multimeter", "set functions and ranges, measure voltage, current, resistance"),
+    "eload": ("electronic load", "set the mode and level, enable the input, read voltage and current"),
+    "awg": ("function generator", "set waveforms, amplitude, and offset, run modulation and bursts"),
+    "scope": ("oscilloscope", "set channels, timebase, and triggers, fetch waveforms"),
+    "daq": ("DAQ", "configure analog, digital, and relay channels, read and write data"),
+    "flowcontroller": ("flow controller", "set flow setpoints, read flow and pressure"),
+    "i2c": ("I2C adapter", "read and write I2C devices"),
+}
 
-    Shibuya writes ``<meta name="description">`` and ``og:description`` from the
-    page's ``description`` metadata (a ``description:`` key in its front matter),
-    but drops docutils ``<meta>`` tags unless sphinxext-opengraph is loaded, so a
-    ``myst: html_meta: description:`` is copied over. Other pages get their first
-    paragraph: on API pages that's the docstring summary, however short, and on
-    guide pages a 40-character floor skips image- and badge-only paragraphs.
+
+def _add_seo(app, pagename, templatename, context, doctree):
+    """Set the page's search-result title (``seo_title``) and meta description.
+
+    Front matter wins: ``seo_title:``, and ``myst: html_meta: description:``.
+    Shibuya renders the ``description`` metadata as ``<meta name="description">``
+    and ``og:description`` but drops docutils ``<meta>`` tags unless
+    sphinxext-opengraph is loaded, so html_meta's is copied over. Driver and API
+    pages get generated ones; other pages fall back to their first paragraph,
+    with a 40-character floor that skips image- and badge-only paragraphs.
     """
     from docutils import nodes
 
     if doctree is None:
         return
     meta = context.get("meta") or {}
-    description = meta.get("description")
+    folder, _, name = pagename.rpartition("/")
+    title, description = meta.get("seo_title"), meta.get("description")
     if not description:
         tag = next((n for n in doctree.findall(nodes.meta) if n.get("name") == "description"), None)
         description = tag["content"] if tag else None
-    if not description:
-        name = pagename.rpartition("/")[2]
-        is_api = pagename.startswith("sdk/") and name.startswith("instro.")
-        description = _description(doctree, min_length=0 if is_api else 40)
-        if not description and is_api:
-            module, _, obj = name.rpartition(".")
-            description = f"API reference for {obj} in {module}, part of the instro Python library."
+
+    if "card" in meta and folder in _DRIVER_CATEGORIES:
+        card, noun, does = meta["card"], *_DRIVER_CATEGORIES[folder]
+        article = "an" if card[0] in "AEIOU" else "a"
+        title = title or f"{card} Python Driver ({name}) - instro"
+        description = description or (
+            f"Control {article} {card} {noun} from Python with the instro {name} driver: {does}."
+        )
+    elif pagename.startswith("sdk/") and name.startswith("instro."):
+        module, _, obj = name.rpartition(".")
+        title = title or f"{obj} ({module}) - instro Python API"
+        description = description or _description(doctree, min_length=0)
+        description = description or f"API reference for {obj} in {module}, part of the instro Python library."
+    description = description or _description(doctree, min_length=40)
+
+    if title:
+        context["seo_title"] = title
     if description:
         context["meta"] = {**meta, "description": _clip(description)}
 
@@ -277,4 +302,4 @@ def setup(app):
     app.connect("autodoc-process-docstring", _drop_basemodel_init_doc)
     app.connect("env-updated", _alias_reexports)
     app.connect("html-page-context", _hide_edit_link_on_stubs, priority=600)
-    app.connect("html-page-context", _add_description)
+    app.connect("html-page-context", _add_seo)
