@@ -193,7 +193,13 @@ def run_all() -> list:
             scope.set_trigger_mode(TriggerMode.AUTO)
             scope.single()
             if not STIMULUS_ON_SIGNAL_CHANNEL:
-                scope.force_trigger()  # single-sequence ignores AUTO and waits for a real trigger edge
+                # Single-sequence ignores AUTO and waits for a real trigger edge. Polling the state to STOPPED
+                # also disarms the HAL, so fetch_waveform reads this capture instead of re-digitizing.
+                scope.force_trigger()
+                deadline = time.monotonic() + 5.0
+                while scope.get_acquisition_state().latest != "STOPPED":
+                    assert time.monotonic() < deadline, "forced trigger did not complete the acquisition"
+                    time.sleep(0.05)
             wf: Measurement = scope.fetch_waveform(channel=ch, timeout=5.0)
             volts = wf.values
             assert len(volts) > 100, f"short waveform: {len(volts)} pts"
