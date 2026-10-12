@@ -73,6 +73,8 @@ _TRIGGER_STATUS_MAP = {
 # measurement has no valid result yet (e.g. slot newly created, no
 # acquisition since slot was added).
 _VENDOR_INVALID_MEASUREMENT = 9.91e37
+# DATa:STOP above the record length clamps to it, so this always returns the full record.
+_MAX_RECORD_LENGTH = 1_000_000_000
 
 
 def _convert_sentinel(value: float) -> float:
@@ -212,13 +214,10 @@ class Tektronix2SeriesMSO(ScopeDriverBase):
         self._visa.write(f"DATa:SOUrce CH{channel}")
         self._visa.write("DATa:ENCdg RIBinary")
         self._visa.write("WFMOutpre:BYT_Nr 2")  # each point returns a signed 2 byte integer
+        self._visa.write("DATa:STARt 1")
+        self._visa.write(f"DATa:STOP {_MAX_RECORD_LENGTH}")  # values above the record length clamp to it
         self.check_errors()  # Check errors prior to queries ensuring good setup
 
-        self._visa.write("DATa:STARt 1")
-        record_length = int(float(self._visa.query("HORizontal:RECOrdlength?")))
-        self._visa.write(f"DATa:STOP {record_length}")
-
-        nr_pt = int(float(self._visa.query("WFMOutpre:NR_Pt?")))  # points per record
         x_incr = float(self._visa.query("WFMOutpre:XINcr?"))  # period time, seconds, float
         x_zero = float(self._visa.query("WFMOutpre:XZEro?"))  # offset time from trigger to first sample
         y_mult = float(self._visa.query("WFMOutpre:YMUlt?"))  # scaling factor to apply to each data point
@@ -230,7 +229,7 @@ class Tektronix2SeriesMSO(ScopeDriverBase):
 
         points = self._visa.query_binary_values("CURVe?", datatype="h", is_big_endian=True, container=list)
 
-        times = [x_zero_ns + i * x_incr_ns for i in range(nr_pt)]
+        times = [x_zero_ns + i * x_incr_ns for i in range(len(points))]
         voltages = [(pt - y_off) * y_mult + y_zero for pt in points]
 
         return WaveformData(times=times, voltages=voltages)
