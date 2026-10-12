@@ -6,6 +6,7 @@ tested; only the custom validators and the config-to-runtime conversion are.
 """
 
 import sys
+import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -221,6 +222,35 @@ def test_unknown_connection_interface_rejected() -> None:
             ],
             "unknown command group 'mode'",
         ),
+        (
+            [
+                {
+                    "type": "command",
+                    "name": "adc",
+                    "address": 0x48,
+                    "data_format": {"transfer_bits": 8},
+                    "commands": {"channel": {"mro": 0x80}},
+                }
+            ],
+            "invalid member name",
+        ),
+        (
+            [
+                {
+                    "type": "register",
+                    "name": "temp",
+                    "address": 0x48,
+                    "registers": [
+                        {
+                            "alias": "t",
+                            "register": 0,
+                            "format": {"transfer_bits": 16, "scaling": {"type": "linear", "gian": 0.5}},
+                        }
+                    ],
+                }
+            ],
+            "gian",
+        ),
     ],
 )
 def test_cross_field_validation_rejects(devices, match) -> None:
@@ -325,6 +355,28 @@ def test_no_poll_entries_registers_nothing() -> None:
 def test_autostart_requires_timing() -> None:
     with pytest.raises(ValueError, match="timing"):
         I2CInterface(config=_minimal_config(), driver=_stub_driver(), autostart=True)
+
+
+def test_autostart_closes_driver_when_start_fails() -> None:
+    driver = _stub_driver()
+    with patch.object(I2CInterface, "start", side_effect=RuntimeError("no thread")):
+        with pytest.raises(RuntimeError, match="no thread"):
+            I2CInterface(config=_minimal_config(timing={"poll_interval": 0.05}), driver=driver, autostart=True)
+    driver.close.assert_called_once()
+
+
+def test_raw_bus_access_waits_for_held_lock() -> None:
+    # A background poll's read must not reach the driver while another thread holds the bus.
+    driver = _stub_driver()
+    i2c = I2CInterface(config=_minimal_config(), driver=driver)
+    with i2c._resource_lock:
+        poll = threading.Thread(target=i2c.read, args=("gpio", "status"))
+        poll.start()
+        poll.join(timeout=0.1)
+        assert poll.is_alive()
+        driver.write_read.assert_not_called()
+    poll.join(timeout=1.0)
+    driver.write_read.assert_called_once()
 
 
 def test_autostart_opens_and_starts() -> None:

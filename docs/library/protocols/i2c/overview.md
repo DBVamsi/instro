@@ -236,7 +236,7 @@ Any register or batch command with `"poll": true` is read by the background daem
 
 #### Custom scaling at runtime
 
-JSON expresses linear scaling only. For anything else, load the config and then attach a {py:class}`~instro.i2c.types.ScalingFunction` with `set_scaling()`. It replaces the scaling from the config and takes effect on the next read, including background polls:
+JSON expresses linear scaling only. For anything else, load the config and then attach a {py:class}`~instro.i2c.types.ScalingFunction` with `set_scaling()`. It replaces the scaling from the config; call it after loading the config and before `start()`:
 
 ```python
 from instro.i2c.types import CustomScaling

@@ -241,6 +241,12 @@ class CommandDeviceConfig(BaseModel):
     @model_validator(mode="after")
     def _validate_commands(self) -> CommandDeviceConfig:
         for group, members in self.commands.items():
+            try:
+                Enum(group, members)
+            except (ValueError, TypeError) as e:
+                raise ValueError(
+                    f"device '{self.name}': command group '{group}' has an invalid member name: {e}"
+                ) from e
             for member, value in members.items():
                 if value > 0xFF:
                     raise ValueError(

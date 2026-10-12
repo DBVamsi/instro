@@ -154,7 +154,8 @@ class I2CInterface(Instrument):
         self._driver = driver
         self._sysdef = system_definition
         self._config = resolved_config
-        self._resource_lock = threading.Lock()
+        # Reentrant: write() and write_then_read_raw() hold it across nested *_raw calls.
+        self._resource_lock = threading.RLock()
 
         if resolved_config is not None:
             self._define_background_daemon(resolved_config)
@@ -168,7 +169,11 @@ class I2CInterface(Instrument):
                     "Without polling configured, autostart has no effect — call open() manually instead."
                 )
             self.open()
-            self.start()
+            try:
+                self.start()
+            except BaseException:
+                self._driver.close()
+                raise
 
     def _define_background_daemon(self, config: I2CConfig) -> None:
         """Register daemon polling for every register and batch command marked ``poll: true``."""
@@ -185,8 +190,8 @@ class I2CInterface(Instrument):
     def set_scaling(self, peripheral: str, scaling: ScalingFunction, register_alias: str | None = None) -> None:
         """Replace the scaling on a register's or command device's data format.
 
-        Lets a config-loaded bus use scaling JSON can't express (``CustomScaling``). Takes effect
-        on the next read, including background polls, and may be called before or after ``open()``.
+        Lets a config-loaded bus use scaling JSON can't express (``CustomScaling``). Call it after
+        loading the config and before ``start()``.
 
         Args:
             peripheral: Device name from the system definition.
@@ -230,17 +235,20 @@ class I2CInterface(Instrument):
             length: Number of bytes to read back.
             endianness: Byte order for the integer decode.
         """
-        data = self._driver.write_read(address, payload, length)
+        with self._resource_lock:
+            data = self._driver.write_read(address, payload, length)
 
         return int.from_bytes(data, endianness)
 
     def write_raw(self, address: int, data: bytes):
         """Write ``data`` to the 7-bit I2C ``address``."""
-        self._driver.write(address, data)
+        with self._resource_lock:
+            self._driver.write(address, data)
 
     def read_raw(self, address: int, length: int, endianness: Literal["little", "big"]) -> int:
         """Read ``length`` bytes from the 7-bit I2C ``address`` and decode as an integer."""
-        data = self._driver.read(address, length)
+        with self._resource_lock:
+            data = self._driver.read(address, length)
 
         return int.from_bytes(data, endianness)
 
