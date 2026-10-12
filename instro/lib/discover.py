@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import importlib
 import re
 import warnings
 from collections.abc import Callable, Iterable, Sequence
@@ -179,10 +180,12 @@ class DiscoveredInstrument:
 
         Raises:
             ValueError: the instrument is not on the VISA transport, which is the only one with a
-                JSON config schema today.
+                JSON config schema today, or its category has no JSON driver config (``daq``).
         """
         if self.transport != VISA_TRANSPORT:
             raise ValueError(f"no JSON config schema for the {self.transport!r} transport")
+        if not hasattr(importlib.import_module(f"instro.{self.category}.config"), "VisaDriverConfig"):
+            raise ValueError(f"no JSON config schema for the {self.category!r} category")
         visa: dict[str, Any] = {"visa_resource": self.resource}
         if self.backend is not None:
             visa["visa_backend"] = self.backend
@@ -551,9 +554,12 @@ def _skip_reason(candidate: Candidate, options: DiscoveryOptions) -> str | None:
         return None
     if options.probe_serial == "none":
         return "serial probing disabled"
-    if options.probe_serial == "usb" and (candidate.port is None or not candidate.port.is_usb):
-        name = f"{candidate.port.device} ({candidate.port.description})" if candidate.port else candidate.resource
-        return f"{name} is not a USB serial port and was not probed"
+    if options.probe_serial == "usb":
+        if candidate.port is None:
+            # e.g. NI-VISA's ASRL<n>::INSTR on macOS/Linux, where the OS port is listed as /dev/...
+            return "no OS serial port matches this resource, so it was not probed"
+        if not candidate.port.is_usb:
+            return f"{candidate.port.device} ({candidate.port.description}) is not a USB serial port and was not probed"
     return None
 
 

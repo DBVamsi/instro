@@ -72,7 +72,14 @@ def _serial_rows(report: DiscoveryReport) -> list[tuple[str, str, str]]:
         port = ports.get(resource)
         return (port.device if port else resource, (port.product if port else None) or "unknown", message)
 
-    rows = [row(s.resource, s.reason) for s in report.skipped if s.resource.upper().startswith("ASRL")]
+    # The OS lists placeholder ports with no description (macOS Bluetooth and debug consoles, unused
+    # Linux ttyS*). They are never instruments, so the table leaves them out when they were skipped.
+    placeholders = {p.resource for p in report.serial_ports if p.description == "n/a"}
+    rows = [
+        row(s.resource, s.reason)
+        for s in report.skipped
+        if s.resource.upper().startswith("ASRL") and s.resource not in placeholders
+    ]
     rows += [row(e.resource, e.hint or e.message) for e in report.errors if e.resource.upper().startswith("ASRL")]
     return rows
 

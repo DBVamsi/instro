@@ -1,5 +1,6 @@
 import dataclasses
 import enum
+import types
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -367,6 +368,22 @@ def test_discovered_instrument_non_visa_transport_passes_resource_to_driver() ->
         found.config_block()
 
 
+def test_config_block_rejects_categories_without_a_json_driver_config() -> None:
+    found = DiscoveredInstrument(
+        resource="TCPIP0::10.0.0.5::INSTR", idn="x", category="daq", driver_name="Keysight34980A"
+    )
+    with pytest.raises(ValueError, match="'daq' category"):
+        found.config_block()
+
+
+def test_instro_lib_discover_is_still_the_module() -> None:
+    import instro.lib
+    import instro.lib.discover as module
+
+    assert isinstance(module, types.ModuleType)
+    assert isinstance(instro.lib.discover, types.ModuleType)
+
+
 def test_discovered_instrument_unregistered_driver_name_raises() -> None:
     found = DiscoveredInstrument(resource="USB0::1::2::INSTR", idn="x", category="psu", driver_name="PSUDriverBase")
     with pytest.raises(KeyError, match="registered for category 'psu'"):
@@ -470,6 +487,15 @@ def test_discover_skips_non_usb_serial_unless_probe_serial_all(_no_serial_ports)
     ]
     assert everything.instruments[0].serial_config == SerialConfig()
     assert disabled.skipped == [SkippedResource("ASRL1::INSTR", "serial probing disabled")]
+
+
+def test_visa_serial_resource_without_an_os_port_says_so(_no_serial_ports) -> None:
+    # NI-VISA on macOS/Linux lists ASRL<n>::INSTR; pyserial lists the same port as /dev/...
+    with patch("instro.lib.discover.pyvisa.ResourceManager", return_value=_rm_mock(("ASRL3::INSTR",))):
+        report = discover()
+    assert report.skipped == [
+        SkippedResource("ASRL3::INSTR", "no OS serial port matches this resource, so it was not probed")
+    ]
 
 
 def test_discover_exclude_matches_resource_or_device_name(_no_serial_ports) -> None:

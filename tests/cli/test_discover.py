@@ -55,6 +55,23 @@ def test_discover_empty_bench():
     assert "NO DEVICES FOUND" in result.output
 
 
+def test_discover_hides_os_placeholder_serial_ports():
+    report = DiscoveryReport(
+        instruments=[],
+        unrecognized=[],
+        errors=[],
+        skipped=[SkippedResource("ASRL/dev/cu.debug-console::INSTR", "not a USB serial port")],
+        serial_ports=[SerialPortInfo("/dev/cu.debug-console", "ASRL/dev/cu.debug-console::INSTR", "n/a")],
+    )
+    with (
+        patch("instro.cli.discover.pyvisa.ResourceManager", return_value=_rm_mock()),
+        patch("instro.cli.discover.discover_instruments", return_value=report),
+    ):
+        result = runner.invoke(app, ["discover"])
+    assert "debug-console" not in result.output
+    assert "NO DEVICES FOUND" in result.output
+
+
 def test_discover_reports_ivi_backend():
     mock_rm = _rm_mock()
     with (
