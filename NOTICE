@@ -53,4 +53,5 @@ the respective vendors under those vendors' own license terms.
   instro-daq-ni        requires NI-DAQmx           (National Instruments)
   instro-daq-labjack   requires LJM Library        (LabJack)
   instro-daq-mcc       requires Universal Library  (Measurement Computing)
+  instro-daq-dewesoftx requires DewesoftX          (Dewesoft)
   instro-i2c-aardvark  requires Aardvark API       (Total Phase)

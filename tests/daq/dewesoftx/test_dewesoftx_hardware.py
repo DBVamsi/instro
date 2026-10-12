@@ -36,7 +36,7 @@ DEWESOFTX SETUP
 RUNNING
 ============================================================================
 
-    uv run pytest tests/unstable/daq -m hardware -v -s
+    uv run --extra dewesoftx pytest tests/daq/dewesoftx -m hardware -v -s
 
 """
 
@@ -49,10 +49,10 @@ import pytest
 pytest.importorskip("win32com")
 
 from instro.daq import HWTimingException, InstroDAQ  # noqa: E402
+from instro.daq.drivers.dewesoftx import DewesoftX  # noqa: E402
 from instro.daq.scaling.thermocouple import TC_TYPE, TC_UNIT  # noqa: E402
 from instro.daq.types import Logic  # noqa: E402
 from instro.lib.types import Measurement  # noqa: E402
-from instro.unstable.daq.drivers import DewesoftX  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Configuration — edit before running

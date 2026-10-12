@@ -50,6 +50,11 @@
         "tests"
       ]
     },
+    "packages/instro-daq-dewesoftx": {
+      "release-type": "python",
+      "component": "instro-daq-dewesoftx",
+      "initial-version": "1.0.0"
+    },
     "packages/instro-daq-labjack": {
       "release-type": "python",
       "component": "instro-daq-labjack"

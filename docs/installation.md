@@ -64,6 +64,7 @@ Here is a table of available packages:
 |  | `nidaq` | NI DAQ package |
 |  | `mccdaq` | Measurement Computing (MCC) package |
 |  | `labjack` | LabJack package |
+|  | `dewesoftx` | DewesoftX package |
 | **I2C** | `i2c` | All I2C packages |
 |  | `aardvark` | TotalPhase Aardvark package |
 | **EtherNet** | `ethernetip` | EtherNet/IP support |
@@ -99,6 +100,7 @@ The table below shows which vendor drivers are required for which `instro` instr
 | **NI-DAQmx** | National Instruments DAQ devices | `NIDAQDriver` |
 | **LJM (LabJack Module)** | LabJack T-Series devices | `LabJackTSeriesDriver` |
 | **MCC Universal Library (`mcculw`)** | Measurement Computing DAQ devices | `MCCDriver` |
+| **DewesoftX** | Channels from a running DewesoftX instance | `DewesoftX` |
 | **Total Phase USB Drivers** | Total Phase Aardvark I2C/SPI Host Adapter | `Aardvark` |
 
 ## VISA
@@ -171,6 +173,24 @@ The MCC Universal Library is the Measurement Computing driver stack for their US
 
 :::{note}
 The MCC Universal Library is currently only available on Windows. MCC DAQ support in `instro` is therefore limited to Windows hosts.
+:::
+
+## DewesoftX
+
+DewesoftX is the Dewesoft data acquisition software. The `DewesoftX` driver reads live channels from a DewesoftX instance that runs on the same PC.
+
+### Used By
+
+- **`InstroDAQ`**: Channels from a running DewesoftX instance (via `DewesoftX`)
+
+### Installation
+
+1. Download and install DewesoftX from the [Dewesoft website](https://dewesoft.com).
+2. Start DewesoftX, load a setup, and set the channels you want to read to **Used**.
+3. The Python bindings (`pywin32`) are installed automatically when you install the `instro[dewesoftx]` or `instro[daq]` extras.
+
+:::{note}
+`instro` connects to DewesoftX over DCOM, which is only available on Windows. DewesoftX support in `instro` is therefore limited to Windows hosts.
 :::
 
 ## Total Phase USB Drivers

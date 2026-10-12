@@ -1,4 +1,4 @@
-"""DAQ drivers package. Vendor packages (LabJack, MCC, NI) contribute drivers via workspace subpackages."""
+"""DAQ drivers package. Vendor packages (LabJack, MCC, NI, DewesoftX) contribute drivers via workspace subpackages."""
 
 from pkgutil import extend_path
 

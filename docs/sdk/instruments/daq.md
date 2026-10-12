@@ -22,7 +22,7 @@ Data acquisition systems.
 | National Instruments | {py:class}`NI-DAQmx <instro.daq.drivers.ni.nidaq.NIDAQDriver>` | {pysummary}`instro.daq.drivers.ni.nidaq.NIDAQDriver` |
 | LabJack | {py:class}`T-series <instro.daq.drivers.labjack.t_series.LabJackTSeriesDriver>` | {pysummary}`instro.daq.drivers.labjack.t_series.LabJackTSeriesDriver` |
 | Measurement Computing | {py:class}`USB-series <instro.daq.drivers.mcc.mccdaq.MCCDriver>` | {pysummary}`instro.daq.drivers.mcc.mccdaq.MCCDriver` |
-| Dewesoft | {py:class}`DewesoftX (unstable) <instro.unstable.daq.drivers.dewesoftx.DewesoftX>` | {pysummary}`instro.unstable.daq.drivers.dewesoftx.DewesoftX` |
+| Dewesoft | {py:class}`DewesoftX <instro.daq.drivers.dewesoftx.dewesoftx.DewesoftX>` | {pysummary}`instro.daq.drivers.dewesoftx.dewesoftx.DewesoftX` |
 
 <!-- The vendor table is laid out by hand for its Vendor/Model columns; its
 descriptions still come from the docstrings via {pysummary}. autosummary needs to
@@ -40,7 +40,7 @@ regardless, so the pages still appear in the sidebar. -->
       instro.daq.drivers.ni.nidaq.NIDAQDriver
       instro.daq.drivers.labjack.t_series.LabJackTSeriesDriver
       instro.daq.drivers.mcc.mccdaq.MCCDriver
-      instro.unstable.daq.drivers.dewesoftx.DewesoftX
+      instro.daq.drivers.dewesoftx.dewesoftx.DewesoftX
 ```
 
 ## Types & Configuration

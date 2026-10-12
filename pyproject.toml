@@ -47,10 +47,11 @@ dependencies = [
 
 [project.optional-dependencies]
 # Hardware-specific drivers with vendor SDKs
-daq = ["instro-daq-ni", "instro-daq-labjack", "instro-daq-mcc"]
+daq = ["instro-daq-ni", "instro-daq-labjack", "instro-daq-mcc", "instro-daq-dewesoftx"]
 labjack = ["instro-daq-labjack"]
 nidaq = ["instro-daq-ni"]
 mccdaq = ["instro-daq-mcc"]
+dewesoftx = ["instro-daq-dewesoftx"]
 i2c = ["instro-i2c-aardvark"]
 aardvark = ["instro-i2c-aardvark"]
 ethernetip = ["instro-ethernetip"]
@@ -60,6 +61,7 @@ all = [
     "instro-daq-ni",
     "instro-daq-labjack",
     "instro-daq-mcc",
+    "instro-daq-dewesoftx",
     "instro-i2c-aardvark",
     "instro-ethernetip",
     "instro-contrib",
@@ -123,6 +125,7 @@ default-groups = ["dev", "test"]
 instro-daq-ni = { workspace = true }
 instro-daq-labjack = { workspace = true }
 instro-daq-mcc = { workspace = true }
+instro-daq-dewesoftx = { workspace = true }
 instro-i2c-aardvark = { workspace = true }
 instro-ethernetip = { workspace = true }
 instro-unstable = { workspace = true }
@@ -133,6 +136,7 @@ members = [
     "packages/instro-daq-ni",
     "packages/instro-daq-labjack",
     "packages/instro-daq-mcc",
+    "packages/instro-daq-dewesoftx",
     "packages/instro-i2c-aardvark",
     "packages/instro-ethernetip",
     "packages/instro-opcua",
@@ -180,6 +184,7 @@ mypy_path = [
     "packages/instro-daq-ni",
     "packages/instro-daq-labjack",
     "packages/instro-daq-mcc",
+    "packages/instro-daq-dewesoftx",
     "packages/instro-i2c-aardvark",
     "packages/instro-ethernetip",
     "packages/instro-unstable",
@@ -193,10 +198,13 @@ testpaths = ["tests"]
 # (mcculw is Windows-only) and must be invoked explicitly (e.g. `pytest tests/daq/mcc`).
 # --ignore=tests/daq/labjack: labjack tests depend on the optional `labjack` extra
 # (LJM SDK; hardware-only) and must be invoked explicitly (e.g. `pytest tests/daq/labjack`).
+# --ignore=tests/daq/dewesoftx: DewesoftX tests depend on the optional `dewesoftx` extra
+# (pywin32; Windows-only, needs a running DewesoftX) and must be invoked explicitly
+# (e.g. `pytest tests/daq/dewesoftx`).
 # --ignore=tests/i2c/totalphase: Aardvark tests depend on the optional `i2c` extra
 # (pyaardvark; hardware-only) and must be invoked explicitly (e.g.
 # `uv run --extra i2c python tests/i2c/totalphase/test_aardvark_hardware.py`).
-addopts = "-m 'not hardware' --ignore=tests/daq/mcc --ignore=tests/daq/labjack --ignore=tests/i2c/totalphase"
+addopts = "-m 'not hardware' --ignore=tests/daq/mcc --ignore=tests/daq/labjack --ignore=tests/daq/dewesoftx --ignore=tests/i2c/totalphase"
 markers = [
     "hardware: tests that require a physical device and loopback wiring (deselected by default)",
 ]

@@ -112,8 +112,8 @@ daq = InstroDAQ(
     driver=Keysight34980A("TCPIP0::<IP_ADDRESS>::INSTR"),
 )
 
-# DewesoftX (unstable: attaches to the DewesoftX instance running on this Windows PC)
-from instro.unstable.daq.drivers import DewesoftX
+# DewesoftX (attaches to the DewesoftX instance running on this Windows PC)
+from instro.daq.drivers.dewesoftx import DewesoftX
 
 daq = InstroDAQ(name="dewesoftDAQ", driver=DewesoftX())
 ```
@@ -269,7 +269,7 @@ Analog driver support:
 | LabJack T-Series | ✅ | ✅ | ❌ | ❌ | ✅ |
 | MCC | ✅ | ✅ | ✅ | ❌ | ✅ |
 | Keysight 34980A | ✅ | ❌ | ❌ | ❌ | ❌ |
-| DewesoftX (unstable) | ✅ | ❌ | ✅ | ❌ | ✅ |
+| DewesoftX | ✅ | ❌ | ✅ | ❌ | ✅ |
 
 Digital driver support:
 
@@ -279,7 +279,7 @@ Digital driver support:
 | LabJack T-Series | ✅ | ✅ | ❌ | ❌ |
 | MCC | ✅ | ✅ | ✅ | ✅ |
 | Keysight 34980A | ✅ | ✅ | ✅ | ✅ |
-| DewesoftX (unstable) | ❌ | ❌ | ❌ | ❌ |
+| DewesoftX | ❌ | ❌ | ❌ | ❌ |
 
 #### LabJack thermocouple channels
 
@@ -353,10 +353,6 @@ daq.configure_voltage_input("1", alias="ch1", terminal_config=TerminalConfig.DIF
 ```
 
 #### DewesoftX channels
-
-:::{warning}
-This driver is currently available only in the Unstable package.
-:::
 
 The `DewesoftX` driver streams live channels from a DewesoftX instance running on the same Windows PC. DewesoftX owns the channel setup, the scaling, and the sample clock, so the driver binds existing channels instead of configuring hardware:
 

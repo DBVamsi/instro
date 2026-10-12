@@ -7,7 +7,7 @@ Context for AI coding tools (Claude Code, Cursor, OpenAI Codex CLI, GitHub Copil
 ```bash
 uv sync                          # default dev/test environment, including native EtherNet/IP
 uv sync --extra all              # additionally select all extras defined in pyproject.toml
-uv sync --extra <name>           # install one optional package (daq, labjack, nidaq, mccdaq, i2c, aardvark)
+uv sync --extra <name>           # install one optional package (daq, labjack, nidaq, mccdaq, dewesoftx, i2c, aardvark)
 just check                       # all lints: python (ruff format, mypy, ruff lint) + Rust (rustfmt, clippy, lockfiles)
 just test                        # all tests: python + Rust; no hardware required
 just check-python / check-rust   # single-language lints (check-rust uses nightly fmt + locked clippy)
@@ -31,7 +31,7 @@ The `instro` repository is a shared `uv`/`cargo` workspace. The top-level Python
 | Python/`uv` | `instro/lib/transports/` | Transport drivers (`VisaDriver`). Category bases are transport-agnostic; concrete drivers compose transports. |
 | Python/`uv` | `packages/instro-contrib/` | Community-contributed drivers. Mirrors core layout under `instro/contrib/`. |
 | Python/`uv` | `packages/instro-unstable/` | In-development categories and abstractions whose API isn't settled. |
-| Python/`uv` | `packages/instro-{daq-ni,daq-labjack,daq-mcc,i2c-aardvark}` | Vendor packages wrapping proprietary native SDKs. |
+| Python/`uv` | `packages/instro-{daq-ni,daq-labjack,daq-mcc,daq-dewesoftx,i2c-aardvark}` | Vendor packages wrapping proprietary native SDKs. |
 | Python/`uv` | `tests/<category>/` | Per-category tests, predominantly mocked-transport unit tests. |
 | Rust/`cargo` | `crates/<category>` | Pure-Rust drivers/utilities (e.g. `instro-ethernetip`). Mixed Rust/Python crates with an entrypoint exposed by the `instro` python package should not live here. |
 

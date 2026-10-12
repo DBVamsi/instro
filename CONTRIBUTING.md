@@ -128,7 +128,7 @@ Notes:
 - The **first `just test` is slow**: it compiles `open62541` and `mbedtls` from C source. Subsequent runs are cached (CI caches this with `Swatinem/rust-cache`).
 - `uv sync` installs the default `dev` and `test` groups, including the EtherNet/IP, unstable, and contrib workspace packages. `just install` runs the same command. `uv run` also syncs this environment automatically.
 - Add vendor extras only when needed, for example `uv sync --extra nidaq`. `uv sync --extra all` selects the extras listed in [pyproject.toml](./pyproject.toml); it does not install proprietary system SDKs or every workspace member.
-- The vendor extras (`daq`, `labjack`, `mccdaq`, `i2c`/`aardvark`) are **not** required for `just test` — those test directories are deselected by default (see `[tool.pytest.ini_options]` in `pyproject.toml`) and need proprietary vendor SDKs plus hardware.
+- The vendor extras (`daq`, `labjack`, `mccdaq`, `dewesoftx`, `i2c`/`aardvark`) are **not** required for `just test` — those test directories are deselected by default (see `[tool.pytest.ini_options]` in `pyproject.toml`) and need proprietary vendor SDKs plus hardware.
 
 ### Rust Cargo.lock
 

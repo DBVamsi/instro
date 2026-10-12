@@ -11,7 +11,7 @@ sys.path.insert(0, str(HERE / "_ext"))
 # Vendor workspace packages aren't installed in the dev env; put their sources on
 # the path so autodoc can import them. instro's drivers packages
 # use pkgutil.extend_path, so these merge into instro.daq.drivers / instro.i2c.drivers.
-for pkg in ("instro-daq-ni", "instro-daq-labjack", "instro-daq-mcc", "instro-i2c-aardvark"):
+for pkg in ("instro-daq-ni", "instro-daq-labjack", "instro-daq-mcc", "instro-daq-dewesoftx", "instro-i2c-aardvark"):
     sys.path.insert(0, str(HERE.parent / "packages" / pkg))
 
 project = "instro"

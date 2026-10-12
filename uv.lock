@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.10, <3.15"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -12,6 +12,7 @@ resolution-markers = [
 members = [
     "instro",
     "instro-contrib",
+    "instro-daq-dewesoftx",
     "instro-daq-labjack",
     "instro-daq-mcc",
     "instro-daq-ni",
@@ -598,6 +599,7 @@ wheels = [
 name = "instro"
 version = "1.21.0"
 source = { editable = "." }
+default-groups = ["dev", "test"]
 dependencies = [
     { name = "fastavro", extra = ["snappy"] },
     { name = "nominal" },
@@ -617,6 +619,7 @@ aardvark = [
 ]
 all = [
     { name = "instro-contrib" },
+    { name = "instro-daq-dewesoftx" },
     { name = "instro-daq-labjack" },
     { name = "instro-daq-mcc" },
     { name = "instro-daq-ni" },
@@ -628,9 +631,13 @@ contrib = [
     { name = "instro-contrib" },
 ]
 daq = [
+    { name = "instro-daq-dewesoftx" },
     { name = "instro-daq-labjack" },
     { name = "instro-daq-mcc" },
     { name = "instro-daq-ni" },
+]
+dewesoftx = [
+    { name = "instro-daq-dewesoftx" },
 ]
 ethernetip = [
     { name = "instro-ethernetip" },
@@ -682,6 +689,9 @@ requires-dist = [
     { name = "fastavro", extras = ["snappy"], specifier = ">=1.12.1" },
     { name = "instro-contrib", marker = "extra == 'all'", editable = "packages/instro-contrib" },
     { name = "instro-contrib", marker = "extra == 'contrib'", editable = "packages/instro-contrib" },
+    { name = "instro-daq-dewesoftx", marker = "extra == 'all'", editable = "packages/instro-daq-dewesoftx" },
+    { name = "instro-daq-dewesoftx", marker = "extra == 'daq'", editable = "packages/instro-daq-dewesoftx" },
+    { name = "instro-daq-dewesoftx", marker = "extra == 'dewesoftx'", editable = "packages/instro-daq-dewesoftx" },
     { name = "instro-daq-labjack", marker = "extra == 'all'", editable = "packages/instro-daq-labjack" },
     { name = "instro-daq-labjack", marker = "extra == 'daq'", editable = "packages/instro-daq-labjack" },
     { name = "instro-daq-labjack", marker = "extra == 'labjack'", editable = "packages/instro-daq-labjack" },
@@ -708,7 +718,7 @@ requires-dist = [
     { name = "thermocouples", specifier = ">=2.1.2" },
     { name = "typer", specifier = ">=0.12" },
 ]
-provides-extras = ["daq", "labjack", "nidaq", "mccdaq", "i2c", "aardvark", "ethernetip", "contrib", "unstable", "all"]
+provides-extras = ["daq", "labjack", "nidaq", "mccdaq", "dewesoftx", "i2c", "aardvark", "ethernetip", "contrib", "unstable", "all"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -746,6 +756,21 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "instro", editable = "." }]
+
+[[package]]
+name = "instro-daq-dewesoftx"
+version = "1.0.0"
+source = { editable = "packages/instro-daq-dewesoftx" }
+dependencies = [
+    { name = "instro" },
+    { name = "pywin32", marker = "sys_platform == 'win32'" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "instro", editable = "." },
+    { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=306" },
+]
 
 [[package]]
 name = "instro-daq-labjack"
@@ -839,7 +864,6 @@ dependencies = [
     { name = "libusb-package" },
     { name = "pyserial" },
     { name = "python-can" },
-    { name = "pywin32", marker = "sys_platform == 'win32'" },
     { name = "scikit-rf" },
 ]
 
@@ -850,7 +874,6 @@ requires-dist = [
     { name = "libusb-package", specifier = ">=1.0.26" },
     { name = "pyserial", specifier = ">=3.5" },
     { name = "python-can", specifier = ">=4.3" },
-    { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=306" },
     { name = "scikit-rf", specifier = ">=2.1.0" },
 ]
 

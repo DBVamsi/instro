@@ -12,6 +12,7 @@ _WORKSPACE_PACKAGES = (
     ("instro-daq-ni", "nidaq"),
     ("instro-daq-labjack", "labjack"),
     ("instro-daq-mcc", "mccdaq"),
+    ("instro-daq-dewesoftx", "dewesoftx"),
     ("instro-i2c-aardvark", "aardvark"),
 )
 
