@@ -40,29 +40,36 @@ class RigolDL3000(ELoadDriverBase):
         )
 
     def set_mode(self, mode: LoadMode, channel: int) -> None:
+        _check_channel(channel)
         self._write_checked(f":SOUR:FUNC {_MODE_KEYWORDS[mode]}")
 
     def set_level(self, mode: LoadMode, value: float, channel: int, curr_limit: float | None) -> None:
         """Set the level for ``mode``; in CV mode, a ``curr_limit`` is written first as the CV current limit."""
+        _check_channel(channel)
         if mode is LoadMode.CV and curr_limit is not None:
             self._write_checked(f":SOUR:VOLT:ILIM {curr_limit}")
         self._write_checked(f":SOUR:{_MODE_KEYWORDS[mode]} {value}")
 
     def set_range(self, mode: LoadMode, value: float, channel: int) -> None:
+        _check_channel(channel)
         if mode is LoadMode.CP:
             raise FeatureNotSupportedError("The Rigol DL3000 has no range in CP mode")
         self._write_checked(f":SOUR:{_MODE_KEYWORDS[mode]}:RANG {value}")
 
     def set_slewrate(self, direction: SlewRateDirection, rate: float, channel: int) -> None:
+        _check_channel(channel)
         self._write_checked(f"{_SLEW_COMMANDS[direction]} {rate}")
 
     def output_enable(self, enable: bool, channel: int) -> None:
+        _check_channel(channel)
         self._write_checked(f":SOUR:INP {'ON' if enable else 'OFF'}")
 
     def get_current(self, channel: int) -> float:
+        _check_channel(channel)
         return self._query_checked_float(":MEAS:CURR?")
 
     def get_voltage(self, channel: int) -> float:
+        _check_channel(channel)
         return self._query_checked_float(":MEAS:VOLT?")
 
     def _write_checked(self, command: str) -> None:
@@ -81,3 +88,8 @@ class RigolDL3000(ELoadDriverBase):
         code = err.strip().split(",", 1)[0].lstrip("+")
         if code != "0":
             raise RuntimeError(f"The Rigol DL3000 reported error: {err.strip()}")
+
+
+def _check_channel(channel: int) -> None:
+    if channel != 1:
+        raise ValueError(f"The Rigol DL3000 only has a single channel, got channel {channel}")

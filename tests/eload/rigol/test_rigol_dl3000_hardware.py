@@ -49,6 +49,7 @@ CHANNEL = 1
 # (DL3021: 150 V / 40 A / 200 W).
 CC_LEVEL_A = 0.1
 CV_LEVEL_V = 5.0
+CV_CURR_LIMIT_A = 0.5
 CR_LEVEL_OHM = 100.0
 CP_LEVEL_W = 1.0
 CC_RANGE_A = 1.0
@@ -123,14 +124,17 @@ def run_all() -> list:
             eload.set_mode(LoadMode.CC, channel=ch)
             eload.set_level(value=CC_LEVEL_A, channel=ch)
             eload.set_mode(LoadMode.CV, channel=ch)
-            eload.set_level(value=CV_LEVEL_V, channel=ch)
+            eload.set_level(value=CV_LEVEL_V, channel=ch, curr_limit=CV_CURR_LIMIT_A)
+            # In CV mode the driver writes curr_limit as :SOUR:VOLT:ILIM; confirm the device holds it.
+            ilim = float(eload._driver._visa.query(":SOUR:VOLT:ILIM?"))
+            assert math.isclose(ilim, CV_CURR_LIMIT_A, rel_tol=1e-3), f"CV current limit: device reports {ilim} A"
             eload.set_mode(LoadMode.CR, channel=ch)
             eload.set_level(value=CR_LEVEL_OHM, channel=ch)
             eload.set_mode(LoadMode.CP, channel=ch)
             eload.set_level(value=CP_LEVEL_W, channel=ch)
             eload.set_mode(LoadMode.CC, channel=ch)
 
-        _run("set_level (CC/CV/CR/CP)", levels, failures)
+        _run("set_level (CC/CV with curr_limit/CR/CP)", levels, failures)
 
         # --- set_range for CC, CV, and CR ---
         def range_cc_cv_cr() -> None:
