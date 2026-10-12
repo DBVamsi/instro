@@ -1,7 +1,8 @@
 """Generate the Examples section (``docs/examples/``, gitignored) from the example scripts.
 
 Each ``examples/<category>/*.py`` becomes a page showing the script, titled from the
-first line of its module docstring; each category gets an index. Examples inside the
+first line of its module docstring (sentence case, without an "Example:" prefix) and
+described by the rest; each category gets an index. Examples inside the
 ``instro-unstable`` and ``instro-contrib`` packages go under ``examples/packages/<pkg>/``
 with the package's caveat. Nothing here is hand-maintained: add a script and it appears.
 Files are only rewritten when their content changes, so live preview doesn't loop.
@@ -60,14 +61,20 @@ def _script_title(py: Path) -> str:
     first = doc.strip().splitlines()[0].strip() if doc.strip() else py.stem
     if first.lower().startswith("example:"):
         first = first[len("example:") :].strip()
-    return first.rstrip(".") or py.stem
+    first = first.rstrip(".") or py.stem
+    # sentence case; only the first letter, so identifiers (JSON, InstroDAQ) keep theirs
+    return first[0].upper() + first[1:]
 
 
 def _script_description(py: Path, title: str) -> str:
-    """The docstring after its title line, or a generic line when that's all there is."""
+    """The title, which keeps descriptions unique, then the docstring's first prose paragraph after it."""
     doc = ast.get_docstring(ast.parse(py.read_text(encoding="utf-8"))) or ""
-    rest = " ".join(doc.strip().split("\n", 1)[1:]).split()
-    return " ".join(rest) or f"Runnable instro example: {title}."
+    for para in doc.strip().split("\n\n")[1:]:
+        text = " ".join(para.split())
+        # skip run commands and option lists
+        if text and not text.lower().startswith(("run", "usage", "uv ", "python ", "-", "*")):
+            return f"instro Python example: {title}. {text}".replace("`", "")
+    return f"instro Python example: {title}.".replace("`", "")
 
 
 def _front_matter(description: str) -> str:
