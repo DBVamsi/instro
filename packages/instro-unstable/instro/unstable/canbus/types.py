@@ -1,6 +1,7 @@
 """JSON config for `CANInterface`: which adapter to open, which DBC describes the bus, and which messages to use."""
 
-from __future__ import annotations
+# No `from __future__ import annotations`: Sphinx resolves a string-typed `timing: TimingConfig`
+# ambiguously (the repo has several TimingConfig classes), which fails the strict docs build.
 
 import difflib
 import json
@@ -80,7 +81,7 @@ class CANConfig(BaseModel):
                 )
 
     @classmethod
-    def from_json(cls, path: Path | str) -> CANConfig:
+    def from_json(cls, path: Path | str) -> "CANConfig":
         """Load and validate a config from a JSON file, resolving ``dbc`` relative to that file."""
         path = Path(path)
         raw = json.loads(path.read_text())
