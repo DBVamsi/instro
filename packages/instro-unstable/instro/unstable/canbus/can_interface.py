@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import cast
 
 import can
-from cantools.database.can import Message
+from cantools.database.can import Message, Signal
 
-from instro.lib import Instrument, Measurement
-from instro.lib.instrument import publish_measurement
+from instro.lib import Command, Instrument, Measurement
+from instro.lib.instrument import publish_command, publish_measurement
 from instro.lib.publishers import Publisher
 from instro.unstable.transports.can import CanSubscription, CanTransport
 
@@ -80,6 +80,12 @@ class CANInterface(Instrument):
 
         self._rx_messages_by_name = {m.name: m for m in self._config.rx_dbc_messages}
         self._rx_messages_by_frame_id = {(m.frame_id, m.is_extended_frame): m for m in self._config.rx_dbc_messages}
+        self._tx_messages_by_name = {m.name: m for m in self._config.tx_dbc_messages}
+
+        # The last value written to every tx signal; write() sends the whole frame, so it needs all of them.
+        self._tx_values: dict[str, dict[str, float]] = {
+            m.name: {s.name: _initial_value(s) for s in m.signals} for m in self._config.tx_dbc_messages
+        }
 
         # The background daemon and the caller both drain, so received-frame state is locked.
         self._lock = threading.Lock()
@@ -195,6 +201,52 @@ class CANInterface(Instrument):
             )
         return measurements
 
+    # ============ Writing ============
+
+    @publish_command
+    def write(self, signal: str, value: float, **kwargs) -> Command:
+        """Send ``signal``'s message with ``signal`` set to ``value``, in the DBC's units.
+
+        A CAN frame carries every signal in its message, so the others are sent with the
+        last value written to them (the DBC's initial value until then). Writing one
+        signal never resets its neighbours.
+
+        Args:
+            signal: ``"Message.signal"``, e.g. ``"Motor_Command.torque_request"``.
+            value: Physical value; the DBC's scaling converts it to raw bits.
+            **kwargs: Extra tags for this Command.
+
+        Returns:
+            Command: ``value`` on channel ``"<name>.<Message>.<signal>.cmd"``.
+
+        Raises:
+            KeyError: The message is not in ``tx_messages``, or has no such signal.
+            cantools.database.EncodeError: ``value`` is outside the signal's DBC range. Nothing is sent.
+            RuntimeError: Not open.
+        """
+        message, signal_name = _find_signal(signal, self._tx_messages_by_name, "tx_messages")
+        with self._lock:
+            self._require_open_locked()
+            values = {**self._tx_values[message.name], signal_name: value}
+            data = message.encode(values)
+            self._transport.send(message.frame_id, data, is_extended_id=message.is_extended_frame)
+            self._tx_values[message.name] = values
+        return Command(
+            channel_data={f"{self.name}.{signal}.cmd": value},
+            timestamp=time.time_ns(),
+            tags={**self.default_tags, **kwargs},
+        )
+
+    def send_frame(self, arbitration_id: int, data: bytes, *, is_extended_id: bool) -> None:
+        """Send one raw frame, bypassing the DBC. Nothing is published.
+
+        Raises:
+            RuntimeError: Not open.
+        """
+        with self._lock:
+            self._require_open_locked()
+            self._transport.send(arbitration_id, data, is_extended_id=is_extended_id)
+
     # ============ Internal Helpers ============
 
     def _is_rx_frame(self, frame: can.Message) -> bool:
@@ -202,13 +254,18 @@ class CANInterface(Instrument):
 
     def _drain_locked(self) -> None:
         """Move pending frames off the bus, keeping the newest frame of each message. Caller holds ``self._lock``."""
-        if self._subscription is None:
-            raise RuntimeError("CANInterface is not open. Call open() first.")
+        subscription = self._require_open_locked()
         received_at = time.time_ns()
-        for frame in self._subscription.drain():
+        for frame in subscription.drain():
             message = self._rx_messages_by_frame_id[(frame.arbitration_id, frame.is_extended_id)]
             self._latest_frames[message.name] = _ReceivedFrame(bytes(frame.data), received_at)
             self._unpublished.add(message.name)
+
+    def _require_open_locked(self) -> CanSubscription:
+        """Return this interface's subscription, or raise if it is not open. Caller holds ``self._lock``."""
+        if self._subscription is None:
+            raise RuntimeError("CANInterface is not open. Call open() first.")
+        return self._subscription
 
 
 def _decode(message: Message, data: bytes) -> dict[str, float]:
@@ -216,6 +273,18 @@ def _decode(message: Message, data: bytes) -> dict[str, float]:
     # decode_choices=False keeps value-table signals numeric, and DBC messages are never containers,
     # so the result is always a flat name -> number mapping.
     return cast(dict[str, float], message.decode(data, decode_choices=False))
+
+
+def _initial_value(signal: Signal) -> float:
+    """What a tx signal sends before it is first written: its DBC initial value, else 0 clamped into its range."""
+    if signal.initial is not None:
+        return cast(float, signal.initial)
+    value = 0.0
+    if signal.minimum is not None:
+        value = max(value, signal.minimum)
+    if signal.maximum is not None:
+        value = min(value, signal.maximum)
+    return value
 
 
 def _find_signal(signal: str, messages: dict[str, Message], config_field: str) -> tuple[Message, str]:

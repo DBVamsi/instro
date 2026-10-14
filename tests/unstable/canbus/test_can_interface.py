@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import can
+import cantools
 import pytest
 
 from instro.unstable.canbus import CANInterface
@@ -101,3 +102,34 @@ def test_poll_publishes_each_message_with_a_new_frame_once(interface: CANInterfa
         "vehicle_bus.BMS_Status.pack_current": [0.0],
     }
     assert interface.poll() == []  # nothing new on the bus
+
+
+@pytest.fixture
+def tx_interface(channel: str) -> Iterator[CANInterface]:
+    """An open interface allowed to send Motor_Command."""
+    bus = _interface(channel, tx_messages=["Motor_Command"])
+    bus.open()
+    yield bus
+    bus.close()
+
+
+def test_write_sends_the_whole_frame_keeping_earlier_signal_values(
+    tx_interface: CANInterface, peer: can.BusABC
+) -> None:
+    tx_interface.write("Motor_Command.torque_request", 12.5)
+    command = tx_interface.write("Motor_Command.enable", 1)
+
+    peer.recv(timeout=1.0)
+    frame = peer.recv(timeout=1.0)
+    assert frame is not None
+    assert (frame.arbitration_id, frame.is_extended_id) == (0x200, False)
+    # torque_request kept at raw 125 (12.5 Nm / 0.1) while enable is set
+    assert bytes(frame.data[:3]) == bytes([125, 0, 1])
+    assert command.channel_data == {"vehicle_bus.Motor_Command.enable.cmd": 1}
+
+
+def test_write_outside_the_dbc_range_sends_nothing(tx_interface: CANInterface, peer: can.BusABC) -> None:
+    with pytest.raises(cantools.database.EncodeError, match="torque_request"):
+        tx_interface.write("Motor_Command.torque_request", 999)
+
+    assert peer.recv(timeout=0.05) is None
