@@ -31,8 +31,12 @@ class KeysightEL30000(ELoadDriverBase):
 
     def open(self) -> None:
         self._visa.open()
-        self._visa.write("*CLS")  # drop errors queued by earlier sessions so they aren't blamed on this one
-        self._write_checked("SYST:REM")
+        try:
+            self._visa.write("*CLS")  # drop errors queued by earlier sessions so they aren't blamed on this one
+            self._write_checked("SYST:REM")
+        except Exception:
+            self._visa.close()
+            raise
 
     def close(self) -> None:
         self._visa.close()
@@ -40,18 +44,17 @@ class KeysightEL30000(ELoadDriverBase):
     def short_output(self, enable: bool, channel: int) -> None:
         # INP:SHOR takes no channel list, so it acts on the selected channel.
         with self._visa.lock():
-            self._visa.write(f"INST:NSEL {channel}")
-            self._visa.write(f"INP:SHOR {int(enable)}")
-            self._check_errors()
+            self._write_checked(f"INST:NSEL {channel}")
+            self._write_checked(f"INP:SHOR {int(enable)}")
 
     def set_mode(self, mode: LoadMode, channel: int) -> None:
         self._write_checked(f"FUNC {loadmode_to_function(mode)}, (@{channel})")
 
     def set_level(self, mode: LoadMode, value: float, channel: int, curr_limit: float | None) -> None:
         with self._visa.lock():
-            self._write_checked(f"{loadmode_to_function(mode)} {value}, (@{channel})")
             if mode is LoadMode.CV and curr_limit is not None:
                 self._write_checked(f"CURR:LIM {curr_limit}, (@{channel})")
+            self._write_checked(f"{loadmode_to_function(mode)} {value}, (@{channel})")
 
     def set_range(self, mode: LoadMode, value: float, channel: int) -> None:
         try:

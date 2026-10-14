@@ -30,7 +30,6 @@ from dataclasses import dataclass
 import pytest
 
 from instro.daq import InstroDAQ
-from instro.daq.drivers.labjack import LabJackTSeriesDriver
 from instro.daq.types import Logic
 from instro.eload import InstroELoad
 from instro.eload.drivers.keysight_el30000 import KeysightEL30000
@@ -150,30 +149,34 @@ class Bench:
 
 @pytest.fixture(scope="module")
 def bench() -> Iterator[Bench]:
+    # Imported here: the LabJack package needs the optional LJM SDK, which CI collection must not require.
+    from instro.daq.drivers.labjack import LabJackTSeriesDriver
+
     eload = InstroELoad(name="hw_validate", driver=KeysightEL30000(RESOURCE), publishers=None)
     psu = InstroPSU(name="hw_psu", driver=RigolDP800(PSU_RESOURCE), num_channels=3, publishers=None)
     relay = InstroDAQ(name="hw_relay", driver=LabJackTSeriesDriver(LABJACK_ID), publishers=None)
-    eload.open()
-    psu.open()
-    relay.open()
+    opened: list[InstroELoad | InstroPSU | InstroDAQ] = []
     try:
+        for device in (eload, psu, relay):
+            device.open()
+            opened.append(device)
         relay.configure_digital_output(RELAY_LINE, logic=Logic.LOW, alias="supply_relay")
         psu.clear_protection(channel=PSU_CHANNEL)  # a trip from an earlier run leaves the output off
         yield Bench(eload, psu, relay)
     finally:
-        # Safe state: load input off, supply off, relay open. Each step is attempted even if one fails.
-        for safe in (
-            lambda: eload.output_enable(False, channel=CHANNEL),
-            lambda: psu.output_enable(False, channel=PSU_CHANNEL),
-            lambda: relay.write_digital_line("supply_relay", 0),
-        ):
+        # Safe state for whatever opened: load input off, supply off, relay open. Each step is attempted regardless.
+        safe_states = {
+            id(eload): lambda: eload.output_enable(False, channel=CHANNEL),
+            id(psu): lambda: psu.output_enable(False, channel=PSU_CHANNEL),
+            id(relay): lambda: relay.write_digital_line("supply_relay", 0),
+        }
+        for device in opened:
             try:
-                safe()
+                safe_states[id(device)]()
             except Exception:  # noqa: BLE001 - best-effort safe state
                 pass
-        relay.close()
-        psu.close()
-        eload.close()
+        for device in reversed(opened):
+            device.close()
 
 
 @pytest.fixture(autouse=True)
