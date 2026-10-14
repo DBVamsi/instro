@@ -89,3 +89,15 @@ def test_read_rejects_messages_outside_rx_messages(channel: str) -> None:
             bus.read("Motor_Feedback.speed")
     finally:
         bus.close()
+
+
+def test_poll_publishes_each_message_with_a_new_frame_once(interface: CANInterface, peer: can.BusABC) -> None:
+    peer.send(_bms_status(volts_raw=(40_000).to_bytes(2, "little"), amps_raw=bytes(2)))
+
+    [measurement] = interface.poll()
+
+    assert measurement.channel_data == {
+        "vehicle_bus.BMS_Status.pack_voltage": [400.0],
+        "vehicle_bus.BMS_Status.pack_current": [0.0],
+    }
+    assert interface.poll() == []  # nothing new on the bus

@@ -40,6 +40,7 @@ class CANInterface(Instrument):
         connection: CanTransport | dict | None = None,
         name: str | None = None,
         publishers: list[Publisher] | None = None,
+        autostart: bool = False,
         **kwargs,
     ) -> None:
         """Initialize a CANInterface.
@@ -51,14 +52,18 @@ class CANInterface(Instrument):
                 to build a private one. Required if the config has no ``connection`` section.
             name: Channel-name prefix; falls back to ``config.device.name``.
             publishers: Publishers that receive emitted Measurement/Command data.
+            autostart: When True, open the bus and start the background daemon, which runs
+                ``poll()`` every ``timing.poll_interval`` seconds. Requires a ``timing`` section.
             **kwargs: Default tags applied to every emitted Measurement/Command.
 
         Raises:
-            ValueError: No connection in the arguments or the config.
+            ValueError: No connection in the arguments or the config, or ``autostart=True``
+                with no ``timing`` section.
 
         Example:
-            >>> bus = CANInterface("bench_can.json")  # doctest: +SKIP
-            >>> bus.open()  # doctest: +SKIP
+            >>> bus = CANInterface("bench_can.json", autostart=True)  # doctest: +SKIP
+            >>> bus.read("BMS_Status.pack_voltage").latest  # doctest: +SKIP
+            400.0
             >>> bus.close()  # doctest: +SKIP
         """
         if isinstance(config, CANConfig):
@@ -79,6 +84,20 @@ class CANInterface(Instrument):
         # The background daemon and the caller both drain, so received-frame state is locked.
         self._lock = threading.Lock()
         self._latest_frames: dict[str, _ReceivedFrame] = {}
+        self._unpublished: set[str] = set()  # messages whose newest frame poll() has not published yet
+
+        self.add_background_daemon_function(self.poll)
+        if self._config.timing is not None:
+            self.background_interval = self._config.timing.poll_interval
+
+        if autostart:
+            if self._config.timing is None:
+                raise ValueError(
+                    "autostart=True requires a 'timing' section in the config (with poll_interval). "
+                    "Without polling configured, autostart has no effect — call open() manually instead."
+                )
+            self.open()
+            self.start()
 
     # ============ Connection Management ============
 
@@ -89,6 +108,7 @@ class CANInterface(Instrument):
         self._transport.open(self)
         with self._lock:
             self._latest_frames.clear()
+            self._unpublished.clear()
             self._subscription = self._transport.subscribe(self._is_rx_frame)
 
     def close(self) -> None:
@@ -141,6 +161,40 @@ class CANInterface(Instrument):
             tags={**self.default_tags, **kwargs},
         )
 
+    @publish_measurement
+    def poll(self, **kwargs) -> list[Measurement]:
+        """Publish every rx message that received a new frame since the last poll. The background daemon runs this.
+
+        A message that has gone quiet publishes nothing rather than repeating its last value.
+        Only the newest frame per message is kept between polls, so poll faster than a
+        message's cycle time to publish every frame.
+
+        Args:
+            **kwargs: Extra tags for these Measurements.
+
+        Returns:
+            list[Measurement]: One per message, with a channel per signal (``"<name>.<Message>.<signal>"``).
+
+        Raises:
+            RuntimeError: Not open.
+        """
+        with self._lock:
+            self._drain_locked()
+            fresh = {name: self._latest_frames[name] for name in sorted(self._unpublished)}
+            self._unpublished.clear()
+
+        measurements = []
+        for message_name, frame in fresh.items():
+            values = _decode(self._rx_messages_by_name[message_name], frame.data)
+            measurements.append(
+                Measurement(
+                    channel_data={f"{self.name}.{message_name}.{signal}": [value] for signal, value in values.items()},
+                    timestamps=[frame.received_at],
+                    tags={**self.default_tags, **kwargs},
+                )
+            )
+        return measurements
+
     # ============ Internal Helpers ============
 
     def _is_rx_frame(self, frame: can.Message) -> bool:
@@ -154,6 +208,7 @@ class CANInterface(Instrument):
         for frame in self._subscription.drain():
             message = self._rx_messages_by_frame_id[(frame.arbitration_id, frame.is_extended_id)]
             self._latest_frames[message.name] = _ReceivedFrame(bytes(frame.data), received_at)
+            self._unpublished.add(message.name)
 
 
 def _decode(message: Message, data: bytes) -> dict[str, float]:
