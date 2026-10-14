@@ -34,6 +34,19 @@ def _interface(connection: str | CanTransport, **overrides: object) -> CANInterf
     return CANInterface(config, connection={"interface": "virtual", "channel": connection})
 
 
+@pytest.fixture
+def interface(channel: str) -> Iterator[CANInterface]:
+    """An open interface receiving every DBC message."""
+    bus = _interface(channel)
+    bus.open()
+    yield bus
+    bus.close()
+
+
+def _bms_status(volts_raw: bytes, amps_raw: bytes) -> can.Message:
+    return can.Message(arbitration_id=0x123, data=volts_raw + amps_raw + bytes(4), is_extended_id=False)
+
+
 def test_interfaces_sharing_a_transport_keep_the_bus_open_until_the_last_closes(channel: str) -> None:
     transport = CanTransport(CanConfig(channel=channel, interface="virtual"))
     first, second = _interface(transport), _interface(transport)
@@ -45,3 +58,34 @@ def test_interfaces_sharing_a_transport_keep_the_bus_open_until_the_last_closes(
 
     second.close()
     assert not transport.is_open
+
+
+def test_read_decodes_the_newest_frame_with_dbc_scaling(interface: CANInterface, peer: can.BusABC) -> None:
+    peer.send(_bms_status(volts_raw=(10_000).to_bytes(2, "little"), amps_raw=bytes(2)))
+    # pack_voltage: raw 40000 * 0.01 V; pack_current: raw -125 * 0.1 A
+    peer.send(_bms_status(volts_raw=(40_000).to_bytes(2, "little"), amps_raw=(-125).to_bytes(2, "little", signed=True)))
+
+    voltage = interface.read("BMS_Status.pack_voltage")
+    current = interface.read("BMS_Status.pack_current")
+
+    assert voltage.channel_data == {"vehicle_bus.BMS_Status.pack_voltage": [400.0]}
+    assert current.latest == -12.5
+
+
+def test_frames_match_on_id_and_id_type(interface: CANInterface, peer: can.BusABC) -> None:
+    peer.send(can.Message(arbitration_id=0x123, data=bytes(8), is_extended_id=True))  # not BMS_Status: wrong id type
+    peer.send(can.Message(arbitration_id=0x18FF50E5, data=(-1500).to_bytes(2, "little", signed=True) + bytes(6)))
+
+    assert interface.read("Motor_Feedback.speed").latest == -1500
+    with pytest.raises(RuntimeError, match="No 'BMS_Status' frame received"):
+        interface.read("BMS_Status.pack_voltage")
+
+
+def test_read_rejects_messages_outside_rx_messages(channel: str) -> None:
+    bus = _interface(channel, rx_messages=["BMS_Status"])
+    bus.open()
+    try:
+        with pytest.raises(KeyError, match="'Motor_Feedback' is not in rx_messages"):
+            bus.read("Motor_Feedback.speed")
+    finally:
+        bus.close()
