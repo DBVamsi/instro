@@ -24,7 +24,7 @@ from instro.eload import InstroELoad
 
 eload = InstroELoad(
     name="myELoad",
-    driver=KeysightEL30000(visa_resource="TCPIP0::192.168.0.10::INSTR"),
+    driver=KeysightEL30000(visa_resource="USB0::0x2A8D::0x3902::MY12345678::INSTR"),
 )
 ```
 

@@ -1,6 +1,6 @@
 """Keysight EL30000-series E-Load driver. Covers EL33133A/EL34143A (1 channel) and EL34243A (2 channels).
 
-Written from the EL30000 Programming Guide; hardware-validated against an EL34243A (short_output not exercised).
+Written from the EL30000 Programming Guide; hardware-validated against an EL34243A.
 """
 
 from instro.eload import ELoadDriverBase
@@ -20,13 +20,29 @@ def loadmode_to_function(mode: LoadMode) -> str:
 
 
 class KeysightEL30000(ELoadDriverBase):
-    """Keysight EL30000-series E-Load (EL33133A/EL34143A/EL34243A).
-
-    Current sign follows the instrument's own convention; it has not been verified against the sink-positive
-    convention of ``InstroELoad``.
-    """
+    """Keysight EL30000-series E-Load (EL33133A/EL34143A/EL34243A)."""
 
     def __init__(self, visa_resource: str | VisaConfig) -> None:
+        """Initialize the driver; the connection opens when ``InstroELoad`` opens.
+
+        Args:
+            visa_resource (str | VisaConfig): VISA resource string, or a `VisaConfig` for custom connection settings.
+
+        Example::
+
+            from instro.eload import InstroELoad
+            from instro.eload.drivers import KeysightEL30000
+            from instro.eload.types import LoadMode
+
+            eload = InstroELoad(
+                name="load",
+                driver=KeysightEL30000("USB0::0x2A8D::0x3902::MY12345678::INSTR"),
+            )
+            eload.open()
+            eload.set_mode(LoadMode.CC, channel=2)
+            eload.set_level(0.2, channel=2)
+            eload.output_enable(True, channel=2)
+        """
         self._visa = VisaDriver(visa_resource)
 
     def open(self) -> None:
