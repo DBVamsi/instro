@@ -14,8 +14,8 @@
     } else {
       // API pages sat in generated/ folders, one page per member, until the class pages took in
       // their members: /sdk/x/generated/instro.a.B/ is now /sdk/x/instro.a.B/, and a member's
-      // old page is an anchor on its class's page.
-      const old = path.match(/^(.*)\/generated\/([^/]+?)(?:\/(?:index\.html)?)?$/);
+      // old page is an anchor on its class's page. Anchored to /sdk/ so the target stays on this site.
+      const old = path.match(/^(\/sdk(?:\/[\w-]+)*)\/generated\/(instro\.[\w.]+?)(?:\/(?:index\.html)?)?$/);
       if (old) {
         const [, dir, name] = old;
         const page = (n) => dir + "/" + n + "/";
