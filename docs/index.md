@@ -95,6 +95,7 @@ daq
 awg
 eload
 flowcontroller
+sdr
 ```
 
 ```{toctree}
@@ -154,6 +155,7 @@ sdk/instruments/scope
 sdk/instruments/flowcontroller
 sdk/instruments/i2c
 sdk/instruments/awg
+sdk/instruments/sdr
 ```
 
 ```{toctree}

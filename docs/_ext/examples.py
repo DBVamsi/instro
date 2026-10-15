@@ -33,6 +33,7 @@ CATEGORIES = {
     "test_rack_example": ("Test Rack", "server"),
     "flowcontroller": ("Flow Controller", "meter"),
     "motorcontroller": ("Motor Controller", "gear"),
+    "sdr": ("SDR", "broadcast"),
     "general": ("General", "code"),
 }
 PACKAGES = {
