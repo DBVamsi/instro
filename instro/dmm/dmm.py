@@ -422,55 +422,37 @@ class InstroDMM(Instrument):
         self.publish(measurement)
         return measurement
 
-    def measure_dc_voltage(self, **kwargs) -> Measurement:
-        """Measure DC voltage (volts), selecting the function first if needed."""
-        return self._set_function_and_read(MeasurementFunction.DC_VOLTAGE, **kwargs)
+    def measure(self, function: MeasurementFunction, **kwargs) -> Measurement:
+        """Switch to ``function`` if needed (handling relay and settling), then read and return the Measurement.
 
-    def measure_ac_voltage(self, **kwargs) -> Measurement:
-        """Measure AC voltage (volts), selecting the function first if needed."""
-        return self._set_function_and_read(MeasurementFunction.AC_VOLTAGE, **kwargs)
-
-    def measure_dc_current(self, **kwargs) -> Measurement:
-        """Measure DC current (amperes), selecting the function first if needed."""
-        return self._set_function_and_read(MeasurementFunction.DC_CURRENT, **kwargs)
-
-    def measure_ac_current(self, **kwargs) -> Measurement:
-        """Measure AC current (amperes), selecting the function first if needed."""
-        return self._set_function_and_read(MeasurementFunction.AC_CURRENT, **kwargs)
-
-    def measure_resistance(self, **kwargs) -> Measurement:
-        """Measure 2-wire resistance (ohms), selecting the function first if needed."""
-        return self._set_function_and_read(MeasurementFunction.TWO_WIRE_RESISTANCE, **kwargs)
-
-    def measure_four_wire_resistance(self, **kwargs) -> Measurement:
-        """Measure 4-wire resistance (ohms), selecting the function first if needed."""
-        return self._set_function_and_read(MeasurementFunction.FOUR_WIRE_RESISTANCE, **kwargs)
-
-    # --- Backward-compat aliases ---
+        Delegates to ``_set_function_and_read`` so the function switch and read stay atomic
+        and safe when the background daemon is running and ``measure`` is called from the main thread.
+        """
+        return self._set_function_and_read(function, **kwargs)
 
     def read_dc_voltage(self, **kwargs) -> Measurement:
         """Read DC voltage (volts), selecting the function first if needed."""
-        return self.measure_dc_voltage(**kwargs)
+        return self._set_function_and_read(MeasurementFunction.DC_VOLTAGE, **kwargs)
 
     def read_ac_voltage(self, **kwargs) -> Measurement:
         """Read AC voltage (volts), selecting the function first if needed."""
-        return self.measure_ac_voltage(**kwargs)
+        return self._set_function_and_read(MeasurementFunction.AC_VOLTAGE, **kwargs)
 
     def read_dc_current(self, **kwargs) -> Measurement:
         """Read DC current (amperes), selecting the function first if needed."""
-        return self.measure_dc_current(**kwargs)
+        return self._set_function_and_read(MeasurementFunction.DC_CURRENT, **kwargs)
 
     def read_ac_current(self, **kwargs) -> Measurement:
         """Read AC current (amperes), selecting the function first if needed."""
-        return self.measure_ac_current(**kwargs)
+        return self._set_function_and_read(MeasurementFunction.AC_CURRENT, **kwargs)
 
     def read_resistance(self, **kwargs) -> Measurement:
         """Read 2-wire resistance (ohms), selecting the function first if needed."""
-        return self.measure_resistance(**kwargs)
+        return self._set_function_and_read(MeasurementFunction.TWO_WIRE_RESISTANCE, **kwargs)
 
     def read_four_wire_resistance(self, **kwargs) -> Measurement:
         """Read 4-wire resistance (ohms), selecting the function first if needed."""
-        return self.measure_four_wire_resistance(**kwargs)
+        return self._set_function_and_read(MeasurementFunction.FOUR_WIRE_RESISTANCE, **kwargs)
 
     def _get_driver_read_method(self, function: MeasurementFunction) -> Callable:
         return {

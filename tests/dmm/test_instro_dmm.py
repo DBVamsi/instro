@@ -260,45 +260,21 @@ def test_read_helper_is_atomic_against_concurrent_function_change(stub_driver: _
     assert "ut.dc_voltage" in readings[0].channel_data
 
 
-# --- measure_* methods (primary API, matching driver naming) ---
+# --- measure(function) ---
 
 
 def test_measure_dc_voltage_selects_function_then_reads(stub_driver: _StubDMMDriver) -> None:
     stub_driver.measured = 2.2
     dmm = InstroDMM(name="ut", driver=stub_driver)
-    measurement = dmm.measure_dc_voltage()
+    measurement = dmm.measure(MeasurementFunction.DC_VOLTAGE)
     assert stub_driver.last_function is MeasurementFunction.DC_VOLTAGE
     assert measurement.channel_data["ut.dc_voltage"] == [2.2]
 
 
-def test_measure_ac_voltage_selects_function_then_reads(stub_driver: _StubDMMDriver) -> None:
-    stub_driver.measured = 1.1
-    dmm = InstroDMM(name="ut", driver=stub_driver)
-    measurement = dmm.measure_ac_voltage()
-    assert stub_driver.last_function is MeasurementFunction.AC_VOLTAGE
-    assert measurement.channel_data["ut.ac_voltage"] == [1.1]
-
-
-def test_measure_dc_current_selects_function_then_reads(stub_driver: _StubDMMDriver) -> None:
-    stub_driver.measured = 0.5
-    dmm = InstroDMM(name="ut", driver=stub_driver)
-    measurement = dmm.measure_dc_current()
-    assert stub_driver.last_function is MeasurementFunction.DC_CURRENT
-    assert measurement.channel_data["ut.dc_current"] == [0.5]
-
-
-def test_measure_ac_current_selects_function_then_reads(stub_driver: _StubDMMDriver) -> None:
-    stub_driver.measured = 0.3
-    dmm = InstroDMM(name="ut", driver=stub_driver)
-    measurement = dmm.measure_ac_current()
-    assert stub_driver.last_function is MeasurementFunction.AC_CURRENT
-    assert measurement.channel_data["ut.ac_current"] == [0.3]
-
-
-def test_measure_resistance_selects_function_then_reads(stub_driver: _StubDMMDriver) -> None:
+def test_measure_two_wire_resistance_selects_function_then_reads(stub_driver: _StubDMMDriver) -> None:
     stub_driver.measured = 100.0
     dmm = InstroDMM(name="ut", driver=stub_driver)
-    measurement = dmm.measure_resistance()
+    measurement = dmm.measure(MeasurementFunction.TWO_WIRE_RESISTANCE)
     assert stub_driver.last_function is MeasurementFunction.TWO_WIRE_RESISTANCE
     assert measurement.channel_data["ut.two_wire_resistance"] == [100.0]
 
@@ -309,35 +285,44 @@ def test_measure_skips_redundant_function_change(stub_driver: _StubDMMDriver) ->
         wraps=stub_driver.set_measurement_function
     )
 
-    dmm.measure_dc_voltage()
-    dmm.measure_dc_voltage()
+    dmm.measure(MeasurementFunction.DC_VOLTAGE)
+    dmm.measure(MeasurementFunction.DC_VOLTAGE)
     assert stub_driver.set_measurement_function.call_count == 1
 
-    dmm.measure_resistance()
+    dmm.measure(MeasurementFunction.TWO_WIRE_RESISTANCE)
     assert stub_driver.set_measurement_function.call_count == 2
     assert stub_driver.set_measurement_function.call_args.args == (MeasurementFunction.TWO_WIRE_RESISTANCE,)
 
 
-# --- read_* backward-compat aliases delegate to measure_* ---
-
-
-def test_read_aliases_delegate_to_measure(stub_driver: _StubDMMDriver) -> None:
-    stub_driver.measured = 4.4
+def test_measure_is_atomic_against_concurrent_function_change(stub_driver: _StubDMMDriver) -> None:
+    """measure() called while the background daemon polls must not interleave the function switch and the read."""
     dmm = InstroDMM(name="ut", driver=stub_driver)
-    measurement = dmm.read_dc_voltage()
-    assert stub_driver.last_function is MeasurementFunction.DC_VOLTAGE
-    assert measurement.channel_data["ut.dc_voltage"] == [4.4]
+    dmm.set_measurement_function(MeasurementFunction.DC_VOLTAGE)
+    stub_driver.measured = 1.0
 
+    parked = threading.Event()
+    resume = threading.Event()
 
-def test_read_aliases_use_same_atomic_path(stub_driver: _StubDMMDriver) -> None:
-    dmm = InstroDMM(name="ut", driver=stub_driver)
-    stub_driver.set_measurement_function = MagicMock(  # type: ignore[method-assign]
-        wraps=stub_driver.set_measurement_function
+    def stalled_measure() -> float:
+        parked.set()
+        resume.wait(timeout=5)
+        return stub_driver.measured
+
+    stub_driver.measure_dc_voltage = stalled_measure  # type: ignore[method-assign]
+
+    readings: list[Measurement] = []
+    reader = threading.Thread(target=lambda: readings.append(dmm.measure(MeasurementFunction.DC_VOLTAGE)))
+    reader.start()
+    assert parked.wait(timeout=5)
+
+    switcher = threading.Thread(
+        target=lambda: dmm.set_measurement_function(MeasurementFunction.TWO_WIRE_RESISTANCE)
     )
+    switcher.start()
+    switcher.join(timeout=0.2)
+    resume.set()
 
-    dmm.read_dc_voltage()
-    dmm.read_dc_voltage()
-    assert stub_driver.set_measurement_function.call_count == 1
+    reader.join(timeout=5)
+    switcher.join(timeout=5)
 
-    dmm.read_resistance()
-    assert stub_driver.set_measurement_function.call_count == 2
+    assert "ut.dc_voltage" in readings[0].channel_data
