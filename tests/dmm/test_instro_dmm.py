@@ -271,6 +271,14 @@ def test_measure_dc_voltage_selects_function_then_reads(stub_driver: _StubDMMDri
     assert measurement.channel_data["ut.dc_voltage"] == [2.2]
 
 
+def test_measure_ac_voltage_selects_function_then_reads(stub_driver: _StubDMMDriver) -> None:
+    stub_driver.measured = 3.3
+    dmm = InstroDMM(name="ut", driver=stub_driver)
+    measurement = dmm.measure(MeasurementFunction.AC_VOLTAGE)
+    assert stub_driver.last_function is MeasurementFunction.AC_VOLTAGE
+    assert measurement.channel_data["ut.ac_voltage"] == [3.3]
+
+
 def test_measure_two_wire_resistance_selects_function_then_reads(stub_driver: _StubDMMDriver) -> None:
     stub_driver.measured = 100.0
     dmm = InstroDMM(name="ut", driver=stub_driver)
