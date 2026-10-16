@@ -310,10 +310,12 @@ def test_measure_is_atomic_against_concurrent_function_change(stub_driver: _Stub
 
     parked = threading.Event()
     resume = threading.Event()
+    active_during_read: list[MeasurementFunction | None] = []
 
     def stalled_measure() -> float:
         parked.set()
         resume.wait(timeout=5)
+        active_during_read.append(stub_driver.last_function)
         return stub_driver.measured
 
     stub_driver.measure_dc_voltage = stalled_measure  # type: ignore[method-assign]
@@ -334,3 +336,4 @@ def test_measure_is_atomic_against_concurrent_function_change(stub_driver: _Stub
     switcher.join(timeout=5)
 
     assert "ut.dc_voltage" in readings[0].channel_data
+    assert active_during_read == [MeasurementFunction.DC_VOLTAGE]
